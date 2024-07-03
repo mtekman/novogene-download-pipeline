@@ -1,0 +1,20 @@
+#+TITLE: Novogene Download Pipeline
+
+This is an ansible playbook cobbled from an old makescript I use to download sequence data from Novogene.
+
+This would all be easy if they had a decent FTP, but they don't, so we use this:
+
+1. Run Puppeteer to navigate the site, select the batch, and download the JSON manifest
+2. Download archive(s), do checksums
+3. Unpack archive(s), do checksums
+4. Upload data to the UseGalaxy FTP and then into an annotated Galaxy history.
+5. Store the sample in local archives
+6. Log to (org-mode) spreadsheet.
+
+
+Email's are sent to an address of choice, but relies on a gmi/lieer,
+and notmuch installation which is done elsewhere: that is, this repo
+is a submodule of a larger email server hosted at:
+
+  https://github.com/mtekman/email-server-rpi5
+
