@@ -1,0 +1,340 @@
+- name: Download Files From Novogene
+  hosts: localhost
+  vars:
+    ## Populated from inventory:
+    # batchid:
+    # send_to_email:
+    ## fixed
+    send_update_email: True
+    email_folder : ~/LABEMAIL/
+    email_subject: "Novogene Batch Download: {{ batchid }}"
+    unpacked_dir : unpacked
+    upload_dir : upload_to_galaxy
+    secrets_novogene : ~/.secrets/novagene_credentials
+    secrets_usegalaxy : ~/.secrets/usegalaxy_credentials
+    bioblend_env : ~/.bioblendenv
+    match_fastq: 'f(ast)?q(\.gz)?'
+    ##
+    dir_tempdown: /home/dietpi/download_area
+    working_dir : "{{ dir_tempdown }}/{{ batchid }}"
+    dir_novogene: /mnt/novogene
+    ansible_remote_tmp: /tmp
+    ftp_directory: '{{ ansible_date_time.date }}-{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}__{{ batchid }}'
+    ##
+    ## Read secrets contents
+    s_usegalaxy: "{{ lookup('file', secrets_usegalaxy) }}"
+    s_novogene : "{{ lookup('file', secrets_novogene) }}"
+    ## Get keys: Galaxy
+    usergalaxy: "{{ s_usegalaxy.split() | first }}"
+    pwdgalaxy : "{{ s_usegalaxy.split()[1] }}"
+    apigalaxy : "{{ s_usegalaxy.split()[2] }}"
+    ## Get keys: Novogene
+    usernovo : "{{ s_novogene.split()[0] }}"
+    pwdnovo  : "{{ s_novogene.split()[1] }}"
+    
+  become: no
+  pre_tasks:
+  - name: Install dependencies
+    become: yes
+    apt:
+      name:
+      - npm
+      - nodejs
+      - lftp
+      - pip
+      - virtualenv
+      state: present
+
+  - name: Install puppeteer
+    npm:
+      name: puppeteer
+      version: 20.9.0
+      global: yes
+      state: present
+
+  - name: Install bioblend
+    pip:
+      name: bioblend
+      version: 1.3.0
+      state: present
+      virtualenv: '{{ bioblend_env }}'
+
+
+  tasks:
+    - name: Get the JSON manifest
+      ## Logs in to the novogene website because they have no working FTP
+      ## and downloads the JSON manifest containing batch info and data links
+      block:
+      - name: Send Email Start
+        shell:
+          chdir: '{{ email_folder }}'
+          cmd: |
+            gmi send {{ send_to_email }} << EOF
+            To: {{ send_to_email }}
+            Subject: {{ email_subject }}
+            Content-Type: text/plain; charset="UTF-8"
+            -----------------
+            
+            This is to let you know that that the Novogene
+            pipeline is currently downloading {{ batchid }}
+            EOF
+        when: send_update_email
+        
+      - name: Setup download area
+        become: no
+        ansible.builtin.file:
+           path: '{{ working_dir }}'
+           state: directory
+           recurse: yes
+
+      - name: Link puppeteer to download area
+        become: no
+        command:
+           cmd: npm link puppeteer
+           chdir: '{{ working_dir }}'
+
+      - name: Copy puppeteer script to download area
+        copy:
+          src: get_batch_node.js
+          dest: '{{ working_dir }}/get_batch_node.js'
+
+      - name: Run puppeteer
+        environment:
+            BATCHNO : '{{ batchid }}'
+            USERLOG : '{{ usernovo.stdout }}'
+            PWDLOG :  '{{ pwdnovo.stdout }}'
+        command:
+           cmd: node get_batch_node.js
+           chdir: '{{ working_dir }}'
+        args:
+          creates: 'batch.json'
+
+    - name: Process the archives
+      block:
+      - name: Generate list of archives
+        shell:
+           chdir: '{{ working_dir }}'
+           cmd: |
+             jq '.Files[] | [.FileName,.Endpoint] | join(" ")' batch.json \
+              | grep -P ".(zip|tar|txt)" | sed 's|"||g' > download_list.txt
+        args:
+           creates: download_list.txt
+
+      - name: Download archive list and MD5
+        get_url:
+           url: "{{ item.1 }}"
+           dest: '{{ working_dir }}/{{ item.0 }}'
+        with_together:
+          - "{{ lookup('file', '{{ working_dir }}/download_list.txt').split('\n') | map('trim') | map('split', ' ') | map('first') }}"
+          - "{{ lookup('file', '{{ working_dir }}/download_list.txt').split('\n') | map('trim') | map('split', ' ') | map('last') }}"
+
+      - name: Get Archive MD5
+        shell:
+           chdir: '{{ working_dir }}'
+           cmd: cat MD5.txt | sort | tee md5_archive.given
+        register: md5_archive_given
+
+      - name: Calculate Archive MD5
+        shell:
+           chdir: '{{ working_dir }}'
+           cmd: md5sum *.tar* | sort | tee md5_archive.calc
+        register: md5_archive_calc
+
+      - name: Test that Archive MD5s match
+        assert:
+           that:
+           - md5_archive_given.stdout == md5_archive_calc.stdout
+           fail_msg: "MD5s for archive do NOT match"
+           success_msg: 'MD5s match for archive'
+
+      - name: Create unpack directory
+        file:
+           path: "{{ working_dir }}/{{ unpacked_dir }}"
+           state: directory
+
+      - name: Unpack Archives
+        unarchive:
+           src: "{{ item }}"
+           dest: "{{ working_dir }}/{{ unpacked_dir }}/"
+           remote_src: yes
+           extra_opts:
+           - "--strip-components=1"
+        loop: "{{ lookup('fileglob', '{{ working_dir }}/*', wantlist=True) }}"
+        when: item.endswith('.zip') or item.endswith('.tar.gz') or item.endswith('.tar.bz2') or item.endswith('.tar')
+
+    - name: Process the FASTQs
+      block:
+      - name: Create the upload folder
+        file:
+           path: "{{ working_dir }}/{{ upload_dir }}"
+           state: directory
+           
+      - name: Populate the upload folder with FASTQ data
+        shell:
+           chdir: '{{ working_dir }}'
+           cmd: |
+             find "{{ working_dir }}/{{ unpacked_dir }}" -type f | grep -P "{{ match_fastq }}" \
+              | xargs -I '{}' mv -i -v '{}' "{{ working_dir }}/{{ upload_dir }}" && \
+             find "{{ working_dir }}/{{ upload_dir }}" -type f > fastq_upld_list.txt
+        args:
+           creates: fastq_upld_list.txt
+
+      - name: Get FASTQ MD5s
+        shell:
+           chdir: '{{ working_dir }}'
+           cmd: |
+             mds_file=$(find "{{ working_dir }}/{{ unpacked_dir }}" -maxdepth 2 -type f -name MD5.txt)
+             cat $mds_file | sed -r 's|([a-z0-9]+)\s+.*/(.*\.{{ match_fastq }})|\1\t\2|g' | \
+               grep -v "report/" | grep -v '.zip' | sort | tee files_given.md5s
+        register: md5_files_given
+
+      - name: Calculate FASTQ MD5s
+        shell:
+           chdir: '{{ working_dir }}'
+           cmd: |
+             cat fastq_upld_list.txt | xargs -I '{}' md5sum '{}' | sed "s|{{ working_dir }}/{{ upload_dir }}/||" \
+              |  sed -r 's|\s+|\t|' | sort | tee files_calc.md5s;
+        register: md5_files_calc
+
+      - name: Test that FASTQ MD5s match
+        assert:
+           that:
+           - md5_files_given.stdout == md5_files_calc.stdout
+           fail_msg: "MD5s for FASTQ do NOT match"
+           success_msg: 'MD5s match for FASTQ'
+
+    - name: Upload Files to Galaxy
+      block:
+      - name: Upload to Galaxy over FTP
+        environment:      
+            REMDIR : '{{ ftp_directory }}'
+            USERLOG: '{{ usergalaxy }}'
+            PWDLOG : '{{ pwdgalaxy }}'
+        shell:
+            chdir: "{{ working_dir }}/{{ upload_dir }}"
+            cmd: lftp -e "set ssl:verify-certificate false; mkdir $REMDIR; cd $REMDIR; mirror --no-recursion -R -c --parallel=10; exit" "$USERLOG":"$PWDLOG"@ftp.usegalaxy.eu
+
+    - name: Move FTPd files into Galaxy History
+      block:
+      - name: Copy over bioblend script
+        copy:
+          src: galaxy_move_to_history.py
+          dest: '{{ working_dir }}/'
+
+      - name: Extract Sample IDs
+        shell:
+          chdir: '{{ working_dir }}'
+          cmd: |
+            awk '{print $2}' files_given.md5s \
+            | sed -r 's|^([A-Z]+)[-_ ]?([0-9]+)_.*[12].{{ match_fastq }}|\1\t\2|g' \
+            | sort -k1 -nk2 | tr '\t' '_' | uniq -c \
+            | awk '{print $2" x "$1}' | tee sample_ids.txt
+        register: sample_ids
+        
+      - name: Extract Tags
+        shell:
+          chdir: '{{ working_dir }}'
+          cmd: cat sample_ids.txt | sed -r 's|^([^_]+)_.*|\1|' | sort | uniq
+        register: tag_ids
+
+      - name: Print Upload Info
+        debug:
+           msg: 'Tags: {{ tag_ids }} | Sample IDS: {{ sample_ids }}'
+
+      - name: Get empty FTP directories
+        environment:      
+            USERLOG: '{{ usergalaxy }}'
+            PWDLOG : '{{ pwdgalaxy }}'
+        shell:
+            cmd: lftp -e "set ssl:verify-certificate false; find -d 2" "$USERLOG":"$PWDLOG"@ftp.usegalaxy.eu | tr '\n' ' '
+        register: ftp_directories
+
+      - name: Print FTP directory info
+        debug:
+           msg: 'Directories found: {{ ftp_directories.stdout }}'
+      
+      - name: Remove empty FTP directories (Ignore errors)
+        environment:      
+            USERLOG: '{{ usergalaxy }}'
+            PWDLOG : '{{ pwdgalaxy }}'
+        shell:
+            cmd: lftp -e "set ssl:verify-certificate false; rmdir {{ ftp_directories.stdout }}" "$USERLOG":"$PWDLOG"@ftp.usegalaxy.eu 2>/dev/null
+        ignore_errors: yes
+
+      - name: Move FTP files into History
+        environment:
+            BATCH_NO : '{{ batchid }}'
+            USEGALAXY_API_KEY : '{{ apigalaxy }}'
+            TAGS : 'datasets {{ tag_ids.stdout }}'
+            SAMPLES : '{{ sample_ids.stdout }}'
+            REMDIR : '{{ ftp_directory }}'
+            VIRTUAL_ENV: '{{ bioblend_env }}'
+        shell:
+            chdir: '{{ working_dir }}/'
+            cmd: |
+              {{ bioblend_env }}/bin/python galaxy_move_to_history.py
+
+      - name: Mount novogene folder
+        become: yes
+        shell: mount {{ dir_novogene }}
+
+      - name: Move Downloaded Files to Archive
+        vars:
+           from_locn : "{{ working_dir }}/{{ upload_dir }}"    ## ensure NO trailing slash
+           dest_root : "{{ dir_novogene }}/Novagene_Raw_Data"
+           dest_batt : "{{ dest_root }}/{{ batchid }}"
+        shell:
+          chdir: '{{ working_dir }}'
+          cmd: |
+            rsync --remove-source-files -avP {{ from_locn }} {{ dest_batt }};
+            mv -i -v {{ batchid }}.* {{ dest_root }}/; \
+            mv -i -v files_given.md5s {{ dest_batt }}.MD5; \
+            mv -i -v sample_ids.txt {{ dest_batt }}.IDs; \
+            mv -i -v "{{ working_dir }}/{{ unpacked_dir }}/*Report*.zip {{ dest_batt }}.report.zip;
+
+      - name: Get ID of last email
+        shell:
+          chdir: '{{ email_folder }}'
+          cmd: |
+            notmuch show --format=json --sort=newest-first --body=false \
+                    tag:sent subject:{{ email_subject }} \
+                    | jq .'[0][][0].id' | xargs echo
+        when: send_update_email
+        register: last_email_sent_id
+        
+      - name: Send Email End
+        shell:
+          chdir: '{{ email_folder }}'
+          cmd: |
+            gmi send {{ send_to_email }} << EOF
+            References: <{{ last_email_sent_id.stdout }}>
+            In-Reply-To: <{{ last_email_sent_id.stdout }}>
+            To: {{ send_to_email }}
+            Subject: Re: {{ email_subject }}
+            Content-Type: text/plain; charset="UTF-8"
+            -----------------
+            
+            The following Novogene samples have been downloaded and archived,
+            as well uploaded to Galaxy history "{{ batchid }}":
+
+            {{ sample_ids.stdout }}
+
+            Please note that the Galaxy history "{{ batchid }}" should be used
+            for strictly archiving purposes.
+
+            If you wish to proceess this data, then copy it over into another
+            history (this will not duplicate the data, but link to it).
+
+            Happy analyzing!
+
+            EOF
+        when: send_update_email
+
+      # - name: Log To Spreadsheet
+      #   block:
+      #   - name: Append to org spreadsheet
+      #     file:
+      #       copy: asdasd
+      #       dest: asdasd
+      #   - name: Convert to Wide Format
+      #   - name: Sync to Lab
