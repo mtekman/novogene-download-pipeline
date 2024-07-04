@@ -332,17 +332,25 @@
 
     - name: Save data to archive
       block:
-      - name: Remount novogene archives as rw
-        mount:
-          path: '{{ novogene_mount }}'
-          opts: 'rw'
-          state: mounted
-      - name: Remount lab data as rw
-        mount:
-          path: '{{ labdata_mount }}'
-          opts: 'rw'
-          state: mounted
-         
+      - name: Mount novogene archives
+        shell: sudo mount -o 'remount,rw' '{{ novogene_mount }}' || sudo mount -o 'rw' '{{ novogene_mount }}'
+
+      - name: Mount lab data
+        shell: sudo mount -o 'remount,rw' '{{ labdata_mount }}' || sudo mount -o 'rw' '{{ labdata_mount }}'
+
+      - name: Unmount novogene archives
+        shell: |
+          sudo sync
+          sudo umount '{{ novogene_mount }}'
+
+      - name: Unmount lab data
+        shell: |
+          sudo sync
+          sudo umount '{{ labdata_mount }}'
+
+
+
+
 
      # - name: Log To Spreadsheet
       #   block:
