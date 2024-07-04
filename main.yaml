@@ -330,7 +330,19 @@
             EOF
         when: send_update_email
 
-      # - name: Log To Spreadsheet
+    - name: Save data to archive
+      block:
+      - name: Remount novogene archives as rw
+        mount:
+          path: '{{ novogene_mount }}'
+          opts: 'rw'
+      - name: Remount lab data as rw
+        mount:
+          path: '{{ labdata_mount }}'
+          opts: 'rw'
+         
+
+     # - name: Log To Spreadsheet
       #   block:
       #   - name: Append to org spreadsheet
       #     file:
