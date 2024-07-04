@@ -336,10 +336,12 @@
         mount:
           path: '{{ novogene_mount }}'
           opts: 'rw'
+          state: mounted
       - name: Remount lab data as rw
         mount:
           path: '{{ labdata_mount }}'
           opts: 'rw'
+          state: mounted
          
 
      # - name: Log To Spreadsheet
