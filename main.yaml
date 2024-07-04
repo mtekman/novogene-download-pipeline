@@ -31,7 +31,7 @@
     ## Get keys: Novogene
     usernovo : "{{ s_novogene.split()[0] }}"
     pwdnovo  : "{{ s_novogene.split()[1] }}"
-    
+
   become: no
   pre_tasks:
   - name: Install dependencies
@@ -74,12 +74,12 @@
             Subject: {{ email_subject }}
             Content-Type: text/plain; charset="UTF-8"
             -----------------
-            
+
             This is to let you know that that the Novogene
             pipeline is currently downloading {{ batchid }}
             EOF
         when: send_update_email
-        
+
       - name: Setup download area
         become: no
         ansible.builtin.file:
@@ -168,7 +168,7 @@
         file:
            path: "{{ working_dir }}/{{ upload_dir }}"
            state: directory
-           
+
       - name: Populate the upload folder with FASTQ data
         shell:
            chdir: '{{ working_dir }}'
@@ -206,7 +206,7 @@
     - name: Upload Files to Galaxy
       block:
       - name: Upload to Galaxy over FTP
-        environment:      
+        environment:
             REMDIR : '{{ ftp_directory }}'
             USERLOG: '{{ usergalaxy }}'
             PWDLOG : '{{ pwdgalaxy }}'
@@ -230,7 +230,7 @@
             | sort -k1 -nk2 | tr '\t' '_' | uniq -c \
             | awk '{print $2" x "$1}' | tee sample_ids.txt
         register: sample_ids
-        
+
       - name: Extract Tags
         shell:
           chdir: '{{ working_dir }}'
@@ -242,7 +242,7 @@
            msg: 'Tags: {{ tag_ids }} | Sample IDS: {{ sample_ids }}'
 
       - name: Get empty FTP directories
-        environment:      
+        environment:
             USERLOG: '{{ usergalaxy }}'
             PWDLOG : '{{ pwdgalaxy }}'
         shell:
@@ -252,9 +252,9 @@
       - name: Print FTP directory info
         debug:
            msg: 'Directories found: {{ ftp_directories.stdout }}'
-      
+
       - name: Remove empty FTP directories (Ignore errors)
-        environment:      
+        environment:
             USERLOG: '{{ usergalaxy }}'
             PWDLOG : '{{ pwdgalaxy }}'
         shell:
@@ -301,7 +301,7 @@
                     | jq .'[0][][0].id' | xargs echo
         when: send_update_email
         register: last_email_sent_id
-        
+
       - name: Send Email End
         shell:
           chdir: '{{ email_folder }}'
@@ -313,7 +313,7 @@
             Subject: Re: {{ email_subject }}
             Content-Type: text/plain; charset="UTF-8"
             -----------------
-            
+
             The following Novogene samples have been downloaded and archived,
             as well uploaded to Galaxy history "{{ batchid }}":
 
