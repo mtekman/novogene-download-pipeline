@@ -24,6 +24,7 @@
     remote_tsv: '{{ labdata_mount }}/novogene_samplesheet.tsv'
     ## Do not modify vars below this line
     ## - Fixed dirs
+    novogene_subdir: Novagene_Raw_Data
     working_dir : "{{ dir_tempdown }}/{{ batchid }}"
     unpacked_dir : unpacked
     upload_dir : upload_to_galaxy
@@ -294,7 +295,7 @@
       - name: Move Downloaded Files to Archive
         vars:
            from_locn : "{{ working_dir }}/{{ upload_dir }}"    ## ensure NO trailing slash
-           dest_root : "{{ novogene_mount }}/Novagene_Raw_Data"
+           dest_root : "{{ novogene_mount }}/{{ novogene_subdir }}"
            dest_batt : "{{ dest_root }}/{{ batchid }}"
         shell:
           chdir: '{{ working_dir }}'
@@ -322,7 +323,7 @@
            CLOSED: [2024-06-24 Mon 17:00]
            :PROPERTIES:
            :BATCHNO:  {{ batchid }}
-           :FILEDIR:  Novagene_Raw_Data/{{ batchid }}
+           :FILEDIR:  {{ novogene_subdir }}/{{ batchid }}
            :IDS:      {{ sample_ids.stdout }}
            :GALAXY:   {{ batchid }}
            :END:
@@ -378,15 +379,15 @@
             archived, and uploaded to Galaxy.
 
             - Samples        : {{ sample_ids.stdout }}
-            - Archives       : {{ novogene_mount }}/Novagene_Raw_Data/{{ batchid }}.*
+            - Archives       : {{ novogene_mount }}/{{ novogene_subdir }}/{{ batchid }}.*
             - Galaxy History : {{ batchid }}
             
-            (  Please note: the Galaxy history "{{ batchid }}" should be
-               used for strictly archiving purposes.
+            (  Please note: the Galaxy history "{{ batchid }}"
+               should be used for strictly archiving purposes.
 
-               If you wish to proceess this data, then copy it over into
-               another history. This will not duplicate the data, but
-               link to it.                                                 )
+               If you wish to proceess this data, then copy it
+               over into another history. This will not duplicate
+               the data, but link to it.                          )
 
             The samplesheet at '{{ remote_tsv }}' has been updated.
 
