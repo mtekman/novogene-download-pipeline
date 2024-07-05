@@ -24,13 +24,14 @@
     remote_tsv: '{{ labdata_mount }}/novogene_samplesheet.tsv'
     ## Do not modify vars below this line
     ## - Fixed dirs
-    novogene_subdir: Novagene_Raw_Data
+    novogene_subdir: TEST
     working_dir : "{{ dir_tempdown }}/{{ batchid }}"
     unpacked_dir : unpacked
     upload_dir : upload_to_galaxy
     ## - Envs and vars
     bioblend_env : ~/.bioblendenv
     match_fastq: 'f(ast)?q(\.gz)?'
+    ansible_lock_file: /tmp/ANSIBLE_LOCK.lock
     ## - 
     ansible_remote_tmp: /tmp
     ftp_directory: '{{ ansible_date_time.date }}-{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}__{{ batchid }}'
@@ -74,10 +75,30 @@
 
 
   tasks:
-    - name: Get the JSON manifest
-      ## Logs in to the novogene website because they have no working FTP
-      ## and downloads the JSON manifest containing batch info and data links
+    - name: Set starting flags
       block:
+      - name: Set Email batch tag to queued
+        shell:
+          cmd: |
+            bash /etc/bashrc.d/emailserver.sh novogene_set_state {{ batchid }} queued
+
+      - name: Wait for other ansible invocations to complete
+        wait_for:
+          path: {{ ansible_lock_file }}
+          state: absent
+          timeout: 300
+
+      - name: Take control of the lock file
+        copy:
+          dest: '{{ ansible_lock_file }}'
+          content: |
+            running: {{ batchid }}
+
+      - name: Set Email batch tag to processing
+        shell:
+          cmd: |
+            bash /etc/bashrc.d/emailserver.sh novogene_set_state {{ batchid }} processing
+
       - name: Send Email Start
         shell:
           chdir: '{{ email_folder }}'
@@ -93,6 +114,10 @@
             EOF
         when: send_update_email
 
+    - name: Get the JSON manifest
+      ## Logs in to the novogene website because they have no working FTP
+      ## and downloads the JSON manifest containing batch info and data links
+      block:
       - name: Setup download area
         become: no
         ansible.builtin.file:
@@ -114,8 +139,8 @@
       - name: Run puppeteer
         environment:
             BATCHNO : '{{ batchid }}'
-            USERLOG : '{{ usernovo.stdout }}'
-            PWDLOG :  '{{ pwdnovo.stdout }}'
+            USERLOG : '{{ usernovo }}'
+            PWDLOG :  '{{ pwdnovo }}'
         command:
            cmd: node get_batch_node.js
            chdir: '{{ working_dir }}'
@@ -335,16 +360,16 @@
 
       - name: Mount lab data rw
         shell: sudo mount -o 'remount,rw' '{{ labdata_mount }}' || sudo mount -o 'rw' '{{ labdata_mount }}'
-        
+
       - name: Copy over local sheet to remote
         copy:
-          src: {{ local_sheet }}
-          dest: {{ remote_sheet }}
+          src: '{{ local_sheet }}'
+          dest: '{{ remote_sheet }}'
 
       - name: Copy over local tsv to remote
         copy:
-          src: {{ local_tsv }}
-          dest: {{ remote_tsv }}
+          src: '{{ local_tsv }}'
+          dest: '{{ remote_tsv }}'
 
       - name: Unmount lab data
         shell: |
@@ -353,6 +378,11 @@
 
     - name: Send final email
       block:
+      - name: Set Email batch tag to finished
+        shell:
+          cmd: |
+            bash /etc/bashrc.d/emailserver.sh novogene_set_state {{ batchid }} finished
+
       - name: Get ID of last email
         shell:
           chdir: '{{ email_folder }}'
@@ -395,3 +425,11 @@
 
             EOF
         when: send_update_email
+
+
+  ## Even if killed, the lock file is removed
+  post_tasks:
+  - name: Remove lock file
+    file:
+      path: '{{ ansible_lock_file }}'
+      state: absent
