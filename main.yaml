@@ -27,6 +27,7 @@
     ## - Fixed dirs
     novogene_subdir: TEST
     working_dir : "{{ dir_tempdown }}/{{ batchid }}"
+    email_chain : '{{ working_dir }}/email.chain'
     unpacked_dir : unpacked
     upload_dir : upload_to_galaxy
     ## - Envs and vars
@@ -129,15 +130,28 @@
             Content-Type: text/plain; charset="UTF-8"
             -----------------
 
-            Bleep, bloop. Automatic email to let you know
-            that Novogene batch {{ batchid }} has been queued
-            for processing.
+            Bleep, bloop.
+            Automatic email to let you know that the novogene pipeline is running
+            for Novogene batch {{ batchid }}.
+
+            Status: {{ batchid }} is <br>waiting</br> in the processing queue.
 
             EOF
         when: send_update_email
 
+      - name: Get ID of last email and set it for future chains
+        shell:
+          chdir: '{{ email_folder }}'
+          cmd: |
+            notmuch show --format=json --sort=newest-first --body=false \
+                    tag:sent subject:{{ email_subject }} \
+                    | jq .'[0][][0].id' | xargs echo | tee {{ email_chain }}
+        when: send_update_email
+
       - name: Check value of current ansible lockfile
-        command: cat {{ ansible_lock_file }}
+        shell: |
+           touch {{ ansible_lock_file }};
+           cat {{ ansible_lock_file }};
         register: last_task
 
       - name: Remove lockfile if current batch is same as last (e.g. for testing)
@@ -162,27 +176,21 @@
           cmd: |
             bash /etc/bashrc.d/emailserver.sh novogene_set_state {{ batchid }} processing
 
-      - name: Get ID of last email
-        shell:
-          chdir: '{{ email_folder }}'
-          cmd: |
-            notmuch show --format=json --sort=newest-first --body=false \
-                    tag:sent subject:{{ email_subject }} \
-                    | jq .'[0][][0].id' | xargs echo
-        when: send_update_email
-        register: last_email_sent_id
-
       - name: Send Email Processing
+        vars:
+          last_email_sent: "{{ lookup('file', email_chain) }}"
         shell:
           chdir: '{{ email_folder }}'
           cmd: |
             gmi send {{ send_to_email }} << EOF
             To: {{ send_to_email }}
+            References: <{{ last_email_sent }}>
+            In-Reply-To: <{{ last_email_sent }}>
             Subject: {{ email_subject }}
             Content-Type: text/plain; charset="UTF-8"
             -----------------
 
-            Status: {{ batchid }} is now out of the queue and is being processed.
+            Status: {{ batchid }} is <br>processing</br>.
             
             EOF
         when: send_update_email
@@ -225,6 +233,25 @@
         args:
            creates: download_list.txt
 
+      - name: Send Email Downloading
+        vars:
+          last_email_sent: "{{ lookup('file', email_chain) }}"
+        shell:
+          chdir: '{{ email_folder }}'
+          cmd: |
+            gmi send {{ send_to_email }} << EOF
+            To: {{ send_to_email }}
+            References: <{{ last_email_sent }}>
+            In-Reply-To: <{{ last_email_sent }}>
+            Subject: {{ email_subject }}
+            Content-Type: text/plain; charset="UTF-8"
+            -----------------
+
+            Status: {{ batchid }} is <br>downloading</br>.
+            
+            EOF
+        when: send_update_email
+
       - name: Download archive list and MD5
         when: not test_mode
         get_url:
@@ -233,6 +260,26 @@
         with_together:
           - "{{ lookup('file', '{{ working_dir }}/download_list.txt').split('\n') | map('trim') | map('split', ' ') | map('first') }}"
           - "{{ lookup('file', '{{ working_dir }}/download_list.txt').split('\n') | map('trim') | map('split', ' ') | map('last') }}"
+
+      - name: Send Email Downloading Finished
+        vars:
+          last_email_sent: "{{ lookup('file', email_chain) }}"
+        shell:
+          chdir: '{{ email_folder }}'
+          cmd: |
+            gmi send {{ send_to_email }} << EOF
+            To: {{ send_to_email }}
+            References: <{{ last_email_sent }}>
+            In-Reply-To: <{{ last_email_sent }}>
+            Subject: {{ email_subject }}
+            Content-Type: text/plain; charset="UTF-8"
+            -----------------
+
+            Status: {{ batchid }} has finished <br>downloading</br>.
+            
+            EOF
+        when: send_update_email
+
 
       - name: Get Archive MD5
         shell:
@@ -472,23 +519,13 @@
           cmd: |
             bash /etc/bashrc.d/emailserver.sh novogene_set_state {{ batchid }} finished
 
-      - name: Get ID of last email
-        shell:
-          chdir: '{{ email_folder }}'
-          cmd: |
-            notmuch show --format=json --sort=newest-first --body=false \
-                    tag:sent subject:{{ email_subject }} \
-                    | jq .'[0][][0].id' | xargs echo
-        when: send_update_email
-        register: last_email_sent_id
-
       - name: Send Email End
         shell:
           chdir: '{{ email_folder }}'
           cmd: |
             gmi send {{ send_to_email }} << EOF
-            References: <{{ last_email_sent_id.stdout }}>
-            In-Reply-To: <{{ last_email_sent_id.stdout }}>
+            References: <{{ last_email_sent }}>
+            In-Reply-To: <{{ last_email_sent }}>
             To: {{ send_to_email }}
             Subject: Re: {{ email_subject }}
             Content-Type: text/plain; charset="UTF-8"
