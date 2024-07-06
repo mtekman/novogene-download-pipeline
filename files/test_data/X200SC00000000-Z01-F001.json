@@ -1,0 +1,20 @@
+{
+  "Files": [
+    {
+      "BatchNo": "X200SC00000000-Z01-F001",
+      "FileName": "MD5.txt",
+      "Endpoint": "testtesttest/CP2020055500055/X200SC00000000-Z01-F001/MD5.txt"
+    },
+    {
+      "BatchNo": "X200SC00000000-Z01-F001",
+      "FileName": "X200SC00000000-Z01-F001.tar",
+      "Endpoint": "testtesttest/CP2020055500055/X200SC00000000-Z01-F001/X200SC00000000-Z01-F001.tar"
+    },
+    {
+      "BatchNo": "X200SC00000000-Z01-F001",
+      "FileName": "checkSize.xls",
+      "Endpoint": "testtesttest/CP2020055500055/X200SC00000000-Z01-F001/checkSize.xls"
+    }
+  ],
+  "RequestId": "thisisatestjson"
+}
