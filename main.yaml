@@ -9,6 +9,7 @@
     # labdata_mount
     ## ------------------------------
     ## fixed
+    test_mode: '"{{ batchid }}" == "X200SC00000000-Z01-F001"'
     send_update_email: True
     email_folder : ~/LABEMAIL/
     email_subject: "Novogene Batch Download: {{ batchid }}"
@@ -32,7 +33,7 @@
     bioblend_env : ~/.bioblendenv
     match_fastq: 'f(ast)?q(\.gz)?'
     ansible_lock_file: /tmp/ANSIBLE_LOCK.lock
-    ## - 
+    ## -
     ansible_remote_tmp: /tmp
     ftp_directory: '{{ ansible_date_time.date }}-{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}__{{ batchid }}'
     ## Read secrets contents
@@ -58,6 +59,7 @@
       - pip
       - virtualenv
       state: present
+    when: not test_mode
 
   - name: Install puppeteer
     npm:
@@ -65,6 +67,7 @@
       version: 20.9.0
       global: yes
       state: present
+    when: not test_mode
 
   - name: Install bioblend
     pip:
@@ -72,9 +75,40 @@
       version: 1.3.0
       state: present
       virtualenv: '{{ bioblend_env }}'
-
+    when: not test_mode
 
   tasks:
+  - name: Prime the working dir
+    become: no
+    ansible.builtin.file:
+       path: '{{ working_dir }}'
+       state: directory
+       recurse: yes
+
+  - name: Don't run puppeteer, install test data
+    when: test_mode
+    block:
+    - name: Install test archive
+      copy:
+        src: test_data/X200SC00000000-Z01-F001.tar
+        dest: '{{ working_dir }}/X200SC00000000-Z01-F001.tar'
+    - name: Install test MD5
+      copy:
+        src: test_data/X200SC00000000-Z01-F001.MD5
+        dest: '{{ working_dir }}/MD5.txt'
+    - name: Install test JSON
+      copy:
+        src: test_data/X200SC00000000-Z01-F001.json
+        dest: '{{ working_dir }}/batch.json'
+    - name: Install fake email to cwd
+      copy:
+        src: test_data/X200SC00000000-Z01-F001.email
+        dest: '{{ working_dir }}/email.txt'
+    - name: Install fake email to notmuch
+      shell:
+        chdir: '{{ working_dir }}'
+        cmd: cat email.txt | notmuch insert --folder mail
+
     - name: Set starting flags
       block:
       - name: Set Email batch tag to queued
@@ -82,17 +116,26 @@
           cmd: |
             bash /etc/bashrc.d/emailserver.sh novogene_set_state {{ batchid }} queued
 
+      - name: Check value of current ansible lockfile
+        command: cat {{ ansible_lock_file }}
+        register: last_task
+
+      - name: Remove lockfile if current batch is same as last (e.g. for testing)
+        file:
+          path: '{{ ansible_lock_file }}'
+          state: absent
+        when: last_task.stdout == batchid
+
       - name: Wait for other ansible invocations to complete
         wait_for:
-          path: {{ ansible_lock_file }}
+          path: '{{ ansible_lock_file }}'
           state: absent
           timeout: 300
 
       - name: Take control of the lock file
         copy:
           dest: '{{ ansible_lock_file }}'
-          content: |
-            running: {{ batchid }}
+          content: '{{ batchid }}'
 
       - name: Set Email batch tag to processing
         shell:
@@ -118,13 +161,6 @@
       ## Logs in to the novogene website because they have no working FTP
       ## and downloads the JSON manifest containing batch info and data links
       block:
-      - name: Setup download area
-        become: no
-        ansible.builtin.file:
-           path: '{{ working_dir }}'
-           state: directory
-           recurse: yes
-
       - name: Link puppeteer to download area
         become: no
         command:
@@ -137,6 +173,7 @@
           dest: '{{ working_dir }}/get_batch_node.js'
 
       - name: Run puppeteer
+        when: not test_mode
         environment:
             BATCHNO : '{{ batchid }}'
             USERLOG : '{{ usernovo }}'
@@ -159,6 +196,7 @@
            creates: download_list.txt
 
       - name: Download archive list and MD5
+        when: not test_mode
         get_url:
            url: "{{ item.1 }}"
            dest: '{{ working_dir }}/{{ item.0 }}'
@@ -252,6 +290,7 @@
             chdir: "{{ working_dir }}/{{ upload_dir }}"
             cmd: lftp -e "set ssl:verify-certificate false; mkdir $REMDIR; cd $REMDIR; mirror --no-recursion -R -c --parallel=10; exit" "$USERLOG":"$PWDLOG"@ftp.usegalaxy.eu
 
+
     - name: Move FTPd files into Galaxy History
       block:
       - name: Copy over bioblend script
@@ -317,7 +356,14 @@
       - name: Mount novogene archives rw
         shell: sudo mount -o 'remount,rw' '{{ novogene_mount }}' || sudo mount -o 'rw' '{{ novogene_mount }}'
 
-      - name: Move Downloaded Files to Archive
+      - name: Move Unpacked Files to Archive
+        synchronize:
+           archive: true
+           recursive: true
+           src: '{{ working_dir }}/{{ upload_dir }}/'
+           dest: '{{ novogene_mount }}/{{ novogene_subdir }}/{{ batchid }}'
+
+      - name: Move supporting files to Archive
         vars:
            from_locn : "{{ working_dir }}/{{ upload_dir }}"    ## ensure NO trailing slash
            dest_root : "{{ novogene_mount }}/{{ novogene_subdir }}"
@@ -325,11 +371,10 @@
         shell:
           chdir: '{{ working_dir }}'
           cmd: |
-            rsync --remove-source-files -avP {{ from_locn }} {{ dest_batt }};
-            mv -i -v {{ batchid }}.* {{ dest_root }}/; \
-            mv -i -v files_given.md5s {{ dest_batt }}.MD5; \
-            mv -i -v sample_ids.txt {{ dest_batt }}.IDs; \
-            mv -i -v "{{ working_dir }}/{{ unpacked_dir }}/*Report*.zip {{ dest_batt }}.report.zip;
+            mv -i -v {{ batchid }}.* {{ dest_root }}/;
+            cp -v files_given.md5s {{ dest_batt }}.MD5;
+            cp -v sample_ids.txt {{ dest_batt }}.IDs;
+            mv -i -v {{ working_dir }}/{{ unpacked_dir }}/*Report*.zip {{ dest_batt }}.report.zip;
 
       - name: Unmount novogene archives
         shell: |
@@ -339,6 +384,11 @@
 
     - name: Log data in spreadsheet
       block:
+      - name: Read sample IDs again
+        shell:
+           cmd: cat '{{ working_dir }}/sample_ids.txt'
+        register: sample_ids
+
       - name: Append new record to local sheet
         blockinfile:
           path: '{{ local_sheet }}'
@@ -411,7 +461,7 @@
             - Samples        : {{ sample_ids.stdout }}
             - Archives       : {{ novogene_mount }}/{{ novogene_subdir }}/{{ batchid }}.*
             - Galaxy History : {{ batchid }}
-            
+
             (  Please note: the Galaxy history "{{ batchid }}"
                should be used for strictly archiving purposes.
 
