@@ -19,8 +19,8 @@
     ##
     dir_tempdown: /home/dietpi/download_area
     ## Labsheet
-    local_sheet: /home/dietpi/NOVOGENE_PIPELINE/samplesheet.org
-    local_tsv: /home/dietpi/NOVOGENE_PIPELINE/samplesheet.tsv
+    local_sheet: /home/dietpi/novogene_pipeline/samplesheet.org
+    local_tsv: /home/dietpi/novogene_pipeline/samplesheet.tsv
     remote_sheet: '{{ labdata_mount }}/novogene_samplesheet.org'
     remote_tsv: '{{ labdata_mount }}/novogene_samplesheet.tsv'
     ## Do not modify vars below this line
@@ -35,7 +35,10 @@
     ansible_lock_file: /tmp/ANSIBLE_LOCK.lock
     ## -
     ansible_remote_tmp: /tmp
-    ftp_directory: '{{ ansible_date_time.date }}-{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}__{{ batchid }}'
+    ## Time stuff
+    cdt : '{{ ansible_date_time }}'
+    ftp_directory: '{{ cdt.date }}-{{ cdt.hour }}{{ cdt.minute }}__{{ batchid }}'
+    org_timestamp: '{{ cdt.date }} {{ cdt.weekday[0:3] }} {{ cdt.hour }}:{{ cdt.minute }}'
     ## Read secrets contents
     s_usegalaxy: "{{ lookup('file', secrets_usegalaxy) }}"
     s_novogene : "{{ lookup('file', secrets_novogene) }}"
@@ -116,6 +119,23 @@
           cmd: |
             bash /etc/bashrc.d/emailserver.sh novogene_set_state {{ batchid }} queued
 
+      - name: Send Email Queued
+        shell:
+          chdir: '{{ email_folder }}'
+          cmd: |
+            gmi send {{ send_to_email }} << EOF
+            To: {{ send_to_email }}
+            Subject: {{ email_subject }}
+            Content-Type: text/plain; charset="UTF-8"
+            -----------------
+
+            Bleep, bloop. Automatic email to let you know
+            that Novogene batch {{ batchid }} has been queued
+            for processing.
+
+            EOF
+        when: send_update_email
+
       - name: Check value of current ansible lockfile
         command: cat {{ ansible_lock_file }}
         register: last_task
@@ -142,7 +162,17 @@
           cmd: |
             bash /etc/bashrc.d/emailserver.sh novogene_set_state {{ batchid }} processing
 
-      - name: Send Email Start
+      - name: Get ID of last email
+        shell:
+          chdir: '{{ email_folder }}'
+          cmd: |
+            notmuch show --format=json --sort=newest-first --body=false \
+                    tag:sent subject:{{ email_subject }} \
+                    | jq .'[0][][0].id' | xargs echo
+        when: send_update_email
+        register: last_email_sent_id
+
+      - name: Send Email Processing
         shell:
           chdir: '{{ email_folder }}'
           cmd: |
@@ -152,8 +182,8 @@
             Content-Type: text/plain; charset="UTF-8"
             -----------------
 
-            This is to let you know that that the Novogene
-            pipeline is currently downloading {{ batchid }}
+            Status: {{ batchid }} is now out of the queue and is being processed.
+            
             EOF
         when: send_update_email
 
@@ -389,34 +419,43 @@
            cmd: cat '{{ working_dir }}/sample_ids.txt'
         register: sample_ids
 
+      - name: Inline sample_ids
+        debug:
+          msg: "{{ sample_ids.stdout | split('\n') | join(', ') }}"
+        register: sample_ids_inline
+
       - name: Append new record to local sheet
         blockinfile:
           path: '{{ local_sheet }}'
-          prepend_newline: true
+          backup: true
+          marker: ": {mark} {{ batchid }} ansible"
+          insertafter: EOF
           block: |
            ** DONE Upload Data:
-           CLOSED: [2024-06-24 Mon 17:00]
+           CLOSED: [{{ org_timestamp }}]
            :PROPERTIES:
            :BATCHNO:  {{ batchid }}
            :FILEDIR:  {{ novogene_subdir }}/{{ batchid }}
-           :IDS:      {{ sample_ids.stdout }}
+           :IDS:      {{ sample_ids_inline.msg }}
            :GALAXY:   {{ batchid }}
            :END:
 
       - name: Convert sheet to tabular
         shell: |
-           emacs --batch {{ local_sheet }} --eval \
-           "(progn (setq filename_export \"{{ local_tsv }}\") (goto-char 0)(org-next-block 1)(let ((org-confirm-babel-evaluate nil)) (org-ctrl-c-ctrl-c)))"
+           emacs -nw -Q --batch '{{ local_sheet }}' --eval \
+           '(progn (setq filename_export "{{ local_tsv }}") (goto-char 0)(org-next-block 1)(let ((org-confirm-babel-evaluate nil)) (org-ctrl-c-ctrl-c)))'
 
       - name: Mount lab data rw
         shell: sudo mount -o 'remount,rw' '{{ labdata_mount }}' || sudo mount -o 'rw' '{{ labdata_mount }}'
 
       - name: Copy over local sheet to remote
+        become_user: root
         copy:
           src: '{{ local_sheet }}'
           dest: '{{ remote_sheet }}'
 
       - name: Copy over local tsv to remote
+        become_user: root
         copy:
           src: '{{ local_tsv }}'
           dest: '{{ remote_tsv }}'
