@@ -1,0 +1,45 @@
+Delivered-To: me@me.com
+Return-Path: <css@novogene-europe.com>
+Received-SPF: pass (google.com);
+Authentication-Results: mx.google.com;
+Received: from donothing.com
+Date: Mon, 18 Mar 2024 16:45:12 +0800 (CST)
+From: css@novogene-europe.com
+To: donothing@nothing.com
+Cc: donothing@nothing.com
+Message-ID: <-593807445.21841.1710751512447@CSS-prod-UK-app3>
+Subject: Novogene Data release - {{ batchid }}
+Content-Type: multipart/mixed; 
+	boundary="----=_Part_21839_904846384.1710751507829"
+Return-Path: donothing@nothing.com
+MIME-Version: 1.0
+
+------=_Part_21839_904846384.1710751507829
+Content-Type: multipart/related; 
+	boundary="----=_Part_21840_-132133017.1710751507829"
+
+------=_Part_21840_-132133017.1710751507829
+Content-Type: text/html;charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+<html><body>
+Dear Sir or Madam,
+
+Thank you for choosing Novogene as your sequencing partner. We are
+pleased to share that your sequencing project
+&lt;H200SC00000000 - {{ batchid }}&gt; has been completed
+and the data is available for download at
+http://data-deliver.novogene.com/login/{{ batchid }}
+
+When prompted please login using your CSS account and password.
+If you do not have CSS account, please login using
+BatchID&nbsp;
+<u><strong>{{ batchid }}</strong></u>&nbsp;
+and Password&nbsp;
+<u><strong>testtest</strong></u>
+</body>
+</html>
+
+------=_Part_21840_-132133017.1710751507829--
+
+------=_Part_21839_904846384.1710751507829--

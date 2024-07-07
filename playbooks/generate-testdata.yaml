@@ -1,0 +1,164 @@
+- name: Generate Novogene testdata
+  hosts: localhost
+  vars:
+    ## Populated from outside
+    batchid: X200SC00000000-Z01-F001
+    sample_prefix: MT
+    sample_nums: "5 6 7"
+    ## 
+    testdata_cache: /tmp/already_generated
+    common_dir: /home/dietpi/download_area/test
+    working_dir: '{{ common_dir }}/{{ batchid }}'
+    ## Fixed
+    fastq_entries: 100000
+    fastq_seqlen: 100
+    ## Deliverables: batch, md5, json, email
+    end_files_exist: false
+    ## Final prefix: .tar, .MD5, .json, .email
+    final_prefix: '{{ testdata_cache }}/{{ batchid }}'
+  become: no
+  pre_tasks:
+  - name: Ensure working directory exists
+    file:
+       path: '{{ working_dir }}'
+       state: directory
+       
+  - name: Ensure test data cache exists
+    file:
+       path: '{{ testdata_cache }}'
+       state: directory
+
+  - name: Determine if batch exists in cache
+    block:
+    - name: Check final files exist
+      stat: {path: '{{ item }}'}
+      loop:
+      - '{{ final_prefix }}.tar'
+      - '{{ final_prefix }}.MD5'
+      - '{{ final_prefix }}.json'
+      - '{{ final_prefix }}.email'
+      register: file_stats
+    - name: Summarize if batch needs regenerating
+      set_fact:
+         end_files_exist: "{{ file_stats.results | selectattr('stat.exists') | list | length == file_stats.results | length }}"
+    - name: Remove final files if full regeneration needed
+      when: not end_files_exist
+      shell:
+        cmd: |
+          rm {{ final_prefix }}.{tar,MD5,json,email};
+          rm -rf {{ working_dir }};
+        
+
+  - name: Generate sample array
+    set_fact:
+      sample_array: '{{ sample_nums | split(" ") }}'
+    when: not end_files_exist
+
+  tasks:
+  - name: Generate new FASTQ data
+    when: not end_files_exist
+    block:
+    - include_tasks: generate-fastq.yaml
+      vars:
+        cwd: '{{ working_dir }}'
+        fq_prefix: '{{ sample_prefix }}'
+        fq_sample: '{{ item }}'
+        fastq_entries: 100000
+        fastq_seqlen: 100
+      loop: '{{ sample_array }}'
+
+    - name: Move to RawData folder
+      shell:
+        chdir: '{{ working_dir }}'
+        cmd: |
+          mkdir 01.RawData
+          mv -v {{ sample_prefix }}_* 01.RawData/
+
+    - name: Generate fake HTML Report zip
+      block:
+      - name : Generate the HTML report
+        copy:
+          dest: '{{ working_dir }}/02.Report_{{ batchid }}.html'
+          content: |
+             <html>
+             <head><title>Data Release README</title></head>
+             <body><h3><center>Data Release README</center></h3>
+                 <h4>1. Introduction</h4>
+                 <p>Dear Customer, here are some tips</p>
+                 <h4>2. Release Directory Tree</h4>
+                 <table><caption><a>Expand all</a><a>Collapse all</a></caption>
+                 <thead><tr><th>Contents</th><th>Description</th><th>Type</th></tr></thead>
+                 <tbody></table>
+                 <h4>3. Tips</h4>
+             </body></html>
+
+      - name : Zip the report
+        shell:
+          cmd: |
+            zip '{{ working_dir }}/02.Report_{{ batchid }}.zip' \
+                '{{ working_dir }}/02.Report_{{ batchid }}.html' && \
+            rm '{{ working_dir }}/02.Report_{{ batchid }}.html'
+
+    - name: Generate file MD5
+      shell:
+        chdir: '{{ working_dir }}'
+        cmd: |
+           find -type f -name "*.fq.gz" -o -name "02.*.zip" \
+            | sort | xargs md5sum | sed 's|./||' > MD5.txt
+      args:
+        creates:
+        - '{{ working_dir }}/MD5.txt'
+
+    - name: Generate decoration files
+      ## these are checksize.xls Readme.html and MD5.zip
+      shell:
+        chdir: '{{ working_dir }}'
+        cmd: |
+          echo "<html><body>junk</body></html>" > Readme.html && \
+          echo "<xml>junk</xml>" > checkSize.xls && \
+          echo "junk" > MD5-manual.pdf && \
+          echo "junk" > MD5-win.exe && \
+          zip MD5.zip MD5-manual.pdf MD5-win.exe && \
+          rm MD5-manual.pdf MD5-win.exe
+      args:
+        creates:
+        - '{{ working_dir }}/Readme.html'
+        - '{{ working_dir }}/MD5.zip'
+        - '{{ working_dir }}/checkSize.xls'
+
+    - name: Tar everything
+      archive:
+        path: '{{ working_dir }}'
+        dest: '{{ final_prefix }}.tar'
+        format: tar
+
+    - name: Generate the tar MD5
+      shell:
+        cmd: md5sum '{{ final_prefix }}.tar' > '{{ final_prefix }}.MD5'
+
+    - name: Generate the fake email message
+      block:
+      - name: Generate the email message ID
+        set_fact:
+          email_messageid: "{{ '-%09d' | format(range(100000000, 1000000000) | random | int) }}.{{ '%05d' | format(range(10000, 100000) | random | int) }}.{{ '%013d' | format(range(1000000000000, 10000000000000) | random | int) }}@CSS-prod-uk-app3"
+
+      - name: Print the messageID
+        debug:
+          msg: "{{ email_messageid }}"
+
+      - name: Generate the fake email
+        template:
+          src: 'email.template'
+          dest: '{{ final_prefix }}.email'
+
+    - name: Generate the fake JSON manifest
+      template:
+        src: 'json.template'
+        dest: '{{ final_prefix }}.json'
+
+    - name: Cleanup the working files
+      shell:
+        cmd: rm -rf '{{ working_dir }}'
+
+
+

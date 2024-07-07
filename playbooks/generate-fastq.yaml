@@ -1,0 +1,40 @@
+- name: Generate FASTQ data pair
+  vars:
+    cwd: /tmp
+    fq_prefix: MT
+    fq_sample: "5"
+    fastq_entries: 100000
+    fastq_seqlen: 100
+    # fixed
+    fq_nameprefix: '{{ fq_prefix }}_{{ fq_sample }}'
+  block:
+  - name: Ensure name prefix is sane
+    debug:
+      msg: '{{ fq_nameprefix }}'
+
+  - name: Create directory
+    file:
+      path: '{{ cwd }}/{{ fq_nameprefix }}'
+      state: directory
+
+  - name: Generate FASTQ
+    shell:
+      chdir: '{{ cwd }}'
+      cmd: |
+        ## Do forward
+        seq 1 {{ fastq_entries }} | awk '{print "@A00123:123:HLN1234:1111:1111:"$1" 1:N:0:GGAGGAGG"; for (i{{ ' = ' }}1; i <= {{ fastq_seqlen }}; i++) printf "G"; print "\n+"; for (i{{ ' = ' }}1; i <= {{ fastq_seqlen }}; i++) printf "F"; print ""}' | gzip -f > '{{ fq_nameprefix }}/{{ fq_nameprefix }}_1.fq.gz'
+        ## Do reverse
+        seq 1 {{ fastq_entries }} | awk '{print "@A00123:123:HLN1234:1111:1111:"$1" 2:N:0:GGAGGAGG"; for (i{{ ' = ' }}1; i <= {{ fastq_seqlen }}; i++) printf "G"; print "\n+"; for (i{{ ' = ' }}1; i <= {{ fastq_seqlen }}; i++) printf "F"; print ""}' | gzip -f > '{{ fq_nameprefix }}/{{ fq_nameprefix }}_2.fq.gz'
+    args:
+      creates:
+      - '{{ fq_nameprefix }}/{{ fq_nameprefix }}_1.fq.gz'
+      - '{{ fq_nameprefix }}/{{ fq_nameprefix }}_2.fq.gz'
+
+  - name: Generate MD5 file for pair
+    shell:
+      chdir: '{{ cwd }}/{{ fq_nameprefix }}'
+      cmd: |
+         md5sum {{ fq_nameprefix }}_*.fq.gz > MD5.txt
+    args:
+      creates:
+      - '{{ cwd }}/{{ fq_nameprefix }}/MD5.txt'

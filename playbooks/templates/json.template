@@ -1,0 +1,20 @@
+{
+  "Files": [
+    {
+      "BatchNo": "{{ batchid }}",
+      "FileName": "MD5.txt",
+      "Endpoint": "testtesttest/CP2020055500055/{{ batchid }}/MD5.txt"
+    },
+    {
+      "BatchNo": "{{ batchid }}",
+      "FileName": "{{ batchid }}.tar",
+      "Endpoint": "testtesttest/CP2020055500055/{{ batchid }}/{{ batchid }}.tar"
+    },
+    {
+      "BatchNo": "{{ batchid }}",
+      "FileName": "checkSize.xls",
+      "Endpoint": "testtesttest/CP2020055500055/{{ batchid }}/checkSize.xls"
+    }
+  ],
+  "RequestId": "thisisatestjson"
+}
