@@ -87,199 +87,102 @@
         chdir: '{{ working_dir }}'
         cmd: cat email.txt | notmuch insert --folder mail
 
-    - name: Set starting flags
-      block:
-      - name: Set Email batch tag to queued
-        tags: email
-        shell:
-          cmd: |
-            bash /etc/bashrc.d/emailserver.sh novogene_set_state {{ batchid }} queued
+  - name: Run queued email
+    include_tasks: playbooks/run-emails.yaml
+    vars: {param: queued}
+    
+  - name: Set starting flags
+    block:        
+    - name: Check value of current ansible lockfile
+      shell: |
+         touch {{ ansible_lock_file }};
+         cat {{ ansible_lock_file }};
+      register: last_task
 
-      - name: Send Email Queued
-        tags: email
-        shell:
-          chdir: '{{ email_folder }}'
-          cmd: |
-            gmi send {{ send_to_email }} << EOF
-            To: {{ send_to_email }}
-            Subject: {{ email_subject }}
-            Content-Type: text/html; charset="UTF-8"
-            -----------------
+    - name: Remove lockfile if current batch is same as last (e.g. for testing)
+      file:
+        path: '{{ ansible_lock_file }}'
+        state: absent
+      when: last_task.stdout == batchid or last_task.stdout == ""
 
-            <html><body><pre>
-            <i>(Bleep, bloop.)</i> Automatic email to let you know that
-            the Novogene sequence retrieval pipeline is running\
-            <hr/>\
-            Status: <b>{{ batchid }}</b>
-                    is <i>waiting</i> in the processing queue.
-            </pre></body></html>
+    - name: Wait for other ansible invocations to complete
+      wait_for:
+        path: '{{ ansible_lock_file }}'
+        state: absent
+        timeout: 300
 
-            EOF
-        when: send_update_email
+    - name: Take control of the lock file
+      copy:
+        dest: '{{ ansible_lock_file }}'
+        content: '{{ batchid }}'
 
-      - name: Get ID of last email and set it for future chains
-        shell:
-          chdir: '{{ email_folder }}'
-          cmd: |
-            notmuch show --format=json --sort=newest-first --body=false \
-                    tag:sent subject:{{ email_subject }} \
-                    | jq .'[0][][0].id' | xargs echo | tee {{ email_chain }}
-        when: send_update_email
+  - name: Run processing emails
+    include_tasks: playbooks/run-emails.yaml
+    vars: {param: processing}
+    
+  - include_tasks: playbooks/run-puppeteer.yaml
 
-      - name: Check value of current ansible lockfile
-        shell: |
-           touch {{ ansible_lock_file }};
-           cat {{ ansible_lock_file }};
-        register: last_task
+  - name: Process the archives
+    block:
+    - name: Generate list of archives
+      shell:
+         chdir: '{{ working_dir }}'
+         cmd: |
+           jq '.Files[] | [.FileName,.Endpoint] | join(" ")' batch.json \
+            | grep -P ".(zip|tar|txt)" | sed 's|"||g' > download_list.txt
+      args:
+         creates: download_list.txt
 
-      - name: Remove lockfile if current batch is same as last (e.g. for testing)
-        file:
-          path: '{{ ansible_lock_file }}'
-          state: absent
-        when: last_task.stdout == batchid or last_task.stdout == ""
+    - name: Run downloading email
+      include_tasks: playbooks/run-emails.yaml
+      vars: {param: downloading}
 
-      - name: Wait for other ansible invocations to complete
-        wait_for:
-          path: '{{ ansible_lock_file }}'
-          state: absent
-          timeout: 300
+    - name: Download archive list and MD5
+      when: not test_mode
+      get_url:
+         url: "{{ item.1 }}"
+         dest: '{{ working_dir }}/{{ item.0 }}'
+      with_together:
+        - "{{ lookup('file', '{{ working_dir }}/download_list.txt').split('\n') | map('trim') | map('split', ' ') | map('first') }}"
+        - "{{ lookup('file', '{{ working_dir }}/download_list.txt').split('\n') | map('trim') | map('split', ' ') | map('last') }}"
 
-      - name: Take control of the lock file
-        copy:
-          dest: '{{ ansible_lock_file }}'
-          content: '{{ batchid }}'
+    - name: Run download finished email
+      include_tasks: playbooks/run-emails.yaml
+      vars: {param: downloadfinished}
 
-      - name: Set Email batch tag to processing
-        tags: email
-        shell:
-          cmd: |
-            bash /etc/bashrc.d/emailserver.sh novogene_set_state {{ batchid }} processing
+    - name: Get Archive MD5
+      shell:
+         chdir: '{{ working_dir }}'
+         cmd: cat MD5.txt | sort | tee md5_archive.given
+      register: md5_archive_given
 
-      - name: Send Email Processing
-        tags: email
-        vars:
-          last_email_sent: "{{ lookup('file', email_chain) }}"
-        shell:
-          chdir: '{{ email_folder }}'
-          cmd: |
-            gmi send {{ send_to_email }} << EOF
-            To: {{ send_to_email }}
-            References: <{{ last_email_sent }}>
-            In-Reply-To: <{{ last_email_sent }}>
-            Subject: {{ email_subject }}
-            Content-Type: text/html; charset="UTF-8"
-            -----------------
+    - name: Calculate Archive MD5
+      shell:
+         chdir: '{{ working_dir }}'
+         cmd: md5sum *.tar* | sort | tee md5_archive.calc
+      register: md5_archive_calc
 
-            <html><body><pre>
-            Status: <b>{{ batchid }}</b>
-                    is now <i>being processed</i>.
-            </pre></body></html>
+    - name: Test that Archive MD5s match
+      assert:
+         that:
+         - md5_archive_given.stdout == md5_archive_calc.stdout
+         fail_msg: "MD5s for archive do NOT match"
+         success_msg: 'MD5s match for archive'
 
-            EOF
-        when: send_update_email
+    - name: Create unpack directory
+      file:
+         path: "{{ working_dir }}/{{ unpacked_dir }}"
+         state: directory
 
-    - include_tasks: playbooks/run-puppeteer.yaml
-
-    - name: Process the archives
-      block:
-      - name: Generate list of archives
-        shell:
-           chdir: '{{ working_dir }}'
-           cmd: |
-             jq '.Files[] | [.FileName,.Endpoint] | join(" ")' batch.json \
-              | grep -P ".(zip|tar|txt)" | sed 's|"||g' > download_list.txt
-        args:
-           creates: download_list.txt
-
-      - name: Send Email Downloading
-        tags: email
-        vars:
-          last_email_sent: "{{ lookup('file', email_chain) }}"
-        shell:
-          chdir: '{{ email_folder }}'
-          cmd: |
-            gmi send {{ send_to_email }} << EOF
-            To: {{ send_to_email }}
-            References: <{{ last_email_sent }}>
-            In-Reply-To: <{{ last_email_sent }}>
-            Subject: {{ email_subject }}
-            Content-Type: text/html; charset="UTF-8"
-            -----------------
-
-            <html><body><pre>
-            Status: <b>{{ batchid }}</b>
-                    is <i>being downloaded</i>.
-            </pre></body></html>
-
-            EOF
-        when: send_update_email
-
-      - name: Download archive list and MD5
-        when: not test_mode
-        get_url:
-           url: "{{ item.1 }}"
-           dest: '{{ working_dir }}/{{ item.0 }}'
-        with_together:
-          - "{{ lookup('file', '{{ working_dir }}/download_list.txt').split('\n') | map('trim') | map('split', ' ') | map('first') }}"
-          - "{{ lookup('file', '{{ working_dir }}/download_list.txt').split('\n') | map('trim') | map('split', ' ') | map('last') }}"
-
-      - name: Send Email Downloading Finished
-        tags: email
-        vars:
-          last_email_sent: "{{ lookup('file', email_chain) }}"
-        shell:
-          chdir: '{{ email_folder }}'
-          cmd: |
-            gmi send {{ send_to_email }} << EOF
-            To: {{ send_to_email }}
-            References: <{{ last_email_sent }}>
-            In-Reply-To: <{{ last_email_sent }}>
-            Subject: {{ email_subject }}
-            Content-Type: text/html; charset="UTF-8"
-            -----------------
-
-            <html><body><pre>
-            Status: <b>{{ batchid }}</b>
-                    is <i>being checked for errors</i>.
-            </pre></body></html>
-
-            EOF
-        when: send_update_email
-
-
-      - name: Get Archive MD5
-        shell:
-           chdir: '{{ working_dir }}'
-           cmd: cat MD5.txt | sort | tee md5_archive.given
-        register: md5_archive_given
-
-      - name: Calculate Archive MD5
-        shell:
-           chdir: '{{ working_dir }}'
-           cmd: md5sum *.tar* | sort | tee md5_archive.calc
-        register: md5_archive_calc
-
-      - name: Test that Archive MD5s match
-        assert:
-           that:
-           - md5_archive_given.stdout == md5_archive_calc.stdout
-           fail_msg: "MD5s for archive do NOT match"
-           success_msg: 'MD5s match for archive'
-
-      - name: Create unpack directory
-        file:
-           path: "{{ working_dir }}/{{ unpacked_dir }}"
-           state: directory
-
-      - name: Unpack Archives
-        unarchive:
-           src: "{{ item }}"
-           dest: "{{ working_dir }}/{{ unpacked_dir }}/"
-           remote_src: yes
-           extra_opts:
-           - "--strip-components=1"
-        loop: "{{ lookup('fileglob', '{{ working_dir }}/*', wantlist=True) }}"
-        when: item.endswith('.zip') or item.endswith('.tar.gz') or item.endswith('.tar.bz2') or item.endswith('.tar')
+    - name: Unpack Archives
+      unarchive:
+         src: "{{ item }}"
+         dest: "{{ working_dir }}/{{ unpacked_dir }}/"
+         remote_src: yes
+         extra_opts:
+         - "--strip-components=1"
+      loop: "{{ lookup('fileglob', '{{ working_dir }}/*', wantlist=True) }}"
+      when: item.endswith('.zip') or item.endswith('.tar.gz') or item.endswith('.tar.bz2') or item.endswith('.tar')
 
     - name: Process the FASTQs
       block:
@@ -480,52 +383,10 @@
           sudo sync
           sudo umount '{{ labdata_mount }}'
 
+
     - name: Send final email
-      block:
-      - name: Set Email batch tag to finished
-        tags: email
-        shell:
-          cmd: |
-            bash /etc/bashrc.d/emailserver.sh novogene_set_state {{ batchid }} finished
-
-      - name: Send Email End
-        tags: email
-        vars:
-          last_email_sent: "{{ lookup('file', email_chain) }}"
-        shell:
-          chdir: '{{ email_folder }}'
-          cmd: |
-            gmi send {{ send_to_email }} << EOF
-            References: <{{ last_email_sent }}>
-            In-Reply-To: <{{ last_email_sent }}>
-            To: {{ send_to_email }}
-            Subject: Re: {{ email_subject }}
-            Content-Type: text/html; charset="UTF-8"
-            -----------------
-
-            <html><body><pre>
-            Novogene batch <b>{{ batchid }}</b> has <i>completed.</i>
-            <small>(downloaded, checked, uploaded to Galaxy, and locally archived).</small>\
-            <hr/>\
-            <i>Sample IDs</i>     : {{ sample_ids_inline.msg }}
-            <i>Archived To</i>    : {{ novogene_mount }}/{{ novogene_subdir }}/{{ batchid }}
-            <i>Galaxy History</i> : {{ batchid }}
-            <i>Samplesheet</i>    : {{ remote_tsv | basename }} (updated)
-            <hr/>
-            Please note:
-
-               The Galaxy history <b>{{ batchid }}</b>
-               should <u>not</u> be used for processing.
-
-               Please <u>copy the data into another history</u>
-               and process it there.
-
-            Happy analyzing!
-            </pre></body></html>
-
-            EOF
-        when: send_update_email
-
+      include_tasks: playbooks/run-emails.yaml
+      vars: {param: final}
 
   ## Even if killed, the lock file is removed
   post_tasks:
