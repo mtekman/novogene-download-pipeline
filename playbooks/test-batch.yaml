@@ -1,22 +1,27 @@
 - name: Don't run puppeteer, install test data
   block:
+  - name: Generate or retrieve batch
+    include_tasks: playbooks/generate-testdata.yaml
+    ## inherits: batchid, testdata_cache
+ 
   - name: Install test archive
     copy:
-      src: test_data/X200SC00000000-Z01-F001.tar
-      dest: '{{ working_dir }}/X200SC00000000-Z01-F001.tar'
+      src : '{{ testdata_cache }}/{{ batchid }}.tar'
+      dest: '{{ working_dir }}/{{ batchid }}.tar'
   - name: Install test MD5
     copy:
-      src: test_data/X200SC00000000-Z01-F001.MD5
+      src : '{{ testdata_cache }}/{{ batchid }}.MD5'
       dest: '{{ working_dir }}/MD5.txt'
   - name: Install test JSON
     copy:
-      src: test_data/X200SC00000000-Z01-F001.json
+      src : '{{ testdata_cache }}/{{ batchid }}.json'
       dest: '{{ working_dir }}/batch.json'
-  - name: Install fake email to cwd
+  - name: Install test email
     copy:
-      src: test_data/X200SC00000000-Z01-F001.email
+      src : '{{ testdata_cache }}/{{ batchid }}.email'
       dest: '{{ working_dir }}/email.txt'
+      
   - name: Install fake email to notmuch
     shell:
       chdir: '{{ working_dir }}'
-      cmd: cat email.txt | notmuch insert --folder mail
+      cmd: cat email.txt | notmuch insert --folder mail -tags +unread

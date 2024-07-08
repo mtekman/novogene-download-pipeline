@@ -1,6 +1,9 @@
 novogene_mount: /mnt/novogene
 labdata_mount: /mnt/labdata
+## Where to store test data
+testdata_cache: /tmp/already_generated
 novogene_subdir: TEST
+## Scripts
 script_email: /etc/bashrc.d/emailserver.sh
 script_phosh: /etc/bashrc.d/phoshtasks.sh
 email_folder : ~/LABEMAIL/

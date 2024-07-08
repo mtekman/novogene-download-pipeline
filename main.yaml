@@ -3,8 +3,8 @@
   vars:
     ## Populated from inventory: batchid, send_to_email, test_mode, 
     test_mode: true
-    send_email: False
-    send_notification: True
+    send_email: false
+    send_notification: true
   vars_files:
   - vars/fixed.yaml     ## fixed variables that shouldn't need to change
   - vars/dynamic.yaml   ## dynamically generated variables from fixed

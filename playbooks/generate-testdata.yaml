@@ -1,14 +1,14 @@
 - name: Generate Novogene testdata
-  hosts: localhost
+  ##hosts: localhost
   vars:
     ## Populated from outside
-    batchid: X200SC00000000-Z01-F001
+    ## batchid: X200SC00000000-Z01-F001
+    ## testdata_cache: /tmp/already_generated
     sample_prefix: MT
     sample_nums: "5 6 7"
     ## 
-    testdata_cache: /tmp/already_generated
     common_dir: /home/dietpi/download_area/test
-    working_dir: '{{ common_dir }}/{{ batchid }}'
+    gendata_dir: '{{ common_dir }}/{{ batchid }}'
     ## Fixed
     fastq_entries: 100000
     fastq_seqlen: 100
@@ -17,10 +17,10 @@
     ## Final prefix: .tar, .MD5, .json, .email
     final_prefix: '{{ testdata_cache }}/{{ batchid }}'
   become: no
-  tasks:
+  block:
   - name: Ensure working directory exists
     file:
-       path: '{{ working_dir }}'
+       path: '{{ gendata_dir }}'
        state: directory
        
   - name: Ensure test data cache exists
@@ -46,7 +46,7 @@
       shell:
         cmd: |
           rm {{ final_prefix }}.{tar,MD5,json,email};
-          rm -rf {{ working_dir }};
+          rm -rf {{ gendata_dir }};
         
 
   - name: Generate sample array
@@ -59,7 +59,7 @@
     block:
     - include_tasks: generate-fastq.yaml
       vars:
-        cwd: '{{ working_dir }}'
+        cwd: '{{ gendata_dir }}'
         fq_prefix: '{{ sample_prefix }}'
         fq_sample: '{{ item }}'
         fastq_entries: 100000
@@ -68,7 +68,7 @@
 
     - name: Move to RawData folder
       shell:
-        chdir: '{{ working_dir }}'
+        chdir: '{{ gendata_dir }}'
         cmd: |
           mkdir 01.RawData
           mv -v {{ sample_prefix }}_* 01.RawData/
@@ -77,7 +77,7 @@
       block:
       - name : Generate the HTML report
         copy:
-          dest: '{{ working_dir }}/02.Report_{{ batchid }}.html'
+          dest: '{{ gendata_dir }}/02.Report_{{ batchid }}.html'
           content: |
              <html>
              <head><title>Data Release README</title></head>
@@ -94,24 +94,24 @@
       - name : Zip the report
         shell:
           cmd: |
-            zip '{{ working_dir }}/02.Report_{{ batchid }}.zip' \
-                '{{ working_dir }}/02.Report_{{ batchid }}.html' && \
-            rm '{{ working_dir }}/02.Report_{{ batchid }}.html'
+            zip '{{ gendata_dir }}/02.Report_{{ batchid }}.zip' \
+                '{{ gendata_dir }}/02.Report_{{ batchid }}.html' && \
+            rm '{{ gendata_dir }}/02.Report_{{ batchid }}.html'
 
     - name: Generate file MD5
       shell:
-        chdir: '{{ working_dir }}'
+        chdir: '{{ gendata_dir }}'
         cmd: |
            find -type f -name "*.fq.gz" -o -name "02.*.zip" \
             | sort | xargs md5sum | sed 's|./||' > MD5.txt
       args:
         creates:
-        - '{{ working_dir }}/MD5.txt'
+        - '{{ gendata_dir }}/MD5.txt'
 
     - name: Generate decoration files
       ## these are checksize.xls Readme.html and MD5.zip
       shell:
-        chdir: '{{ working_dir }}'
+        chdir: '{{ gendata_dir }}'
         cmd: |
           echo "<html><body>junk</body></html>" > Readme.html && \
           echo "<xml>junk</xml>" > checkSize.xls && \
@@ -121,13 +121,13 @@
           rm MD5-manual.pdf MD5-win.exe
       args:
         creates:
-        - '{{ working_dir }}/Readme.html'
-        - '{{ working_dir }}/MD5.zip'
-        - '{{ working_dir }}/checkSize.xls'
+        - '{{ gendata_dir }}/Readme.html'
+        - '{{ gendata_dir }}/MD5.zip'
+        - '{{ gendata_dir }}/checkSize.xls'
 
     - name: Tar everything
       archive:
-        path: '{{ working_dir }}'
+        path: '{{ gendata_dir }}'
         dest: '{{ final_prefix }}.tar'
         format: tar
 
@@ -158,7 +158,7 @@
 
     - name: Cleanup the working files
       shell:
-        cmd: rm -rf '{{ working_dir }}'
+        cmd: rm -rf '{{ gendata_dir }}'
 
 
 
