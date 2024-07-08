@@ -5,10 +5,11 @@
     # ------------------------------
     # batchid
     # send_to_email
-    # novogene_mount
     # labdata_mount
     ## ------------------------------
     ## fixed
+    novogene_mount: /mnt/novogene
+    labdata_mount: /mnt/labdata
     test_mode: '"{{ batchid }}" == "X200SC00000000-Z01-F001"'
     send_update_email: True
     email_folder : ~/LABEMAIL/
@@ -116,25 +117,29 @@
     - name: Set starting flags
       block:
       - name: Set Email batch tag to queued
+        tags: email
         shell:
           cmd: |
             bash /etc/bashrc.d/emailserver.sh novogene_set_state {{ batchid }} queued
 
       - name: Send Email Queued
+        tags: email
         shell:
           chdir: '{{ email_folder }}'
           cmd: |
             gmi send {{ send_to_email }} << EOF
             To: {{ send_to_email }}
             Subject: {{ email_subject }}
-            Content-Type: text/plain; charset="UTF-8"
+            Content-Type: text/html; charset="UTF-8"
             -----------------
 
-            Bleep, bloop.
-            Automatic email to let you know that the novogene pipeline is running
-            for Novogene batch {{ batchid }}.
-
-            Status: {{ batchid }} is <br>waiting</br> in the processing queue.
+            <html><body><pre>
+            <i>(Bleep, bloop.)</i> Automatic email to let you know that
+            the Novogene sequence retrieval pipeline is running\
+            <hr/>\
+            Status: <b>{{ batchid }}</b>
+                    is <i>waiting</i> in the processing queue.
+            </pre></body></html>
 
             EOF
         when: send_update_email
@@ -158,7 +163,7 @@
         file:
           path: '{{ ansible_lock_file }}'
           state: absent
-        when: last_task.stdout == batchid
+        when: last_task.stdout == batchid or last_task.stdout == ""
 
       - name: Wait for other ansible invocations to complete
         wait_for:
@@ -172,11 +177,13 @@
           content: '{{ batchid }}'
 
       - name: Set Email batch tag to processing
+        tags: email
         shell:
           cmd: |
             bash /etc/bashrc.d/emailserver.sh novogene_set_state {{ batchid }} processing
 
       - name: Send Email Processing
+        tags: email
         vars:
           last_email_sent: "{{ lookup('file', email_chain) }}"
         shell:
@@ -187,11 +194,14 @@
             References: <{{ last_email_sent }}>
             In-Reply-To: <{{ last_email_sent }}>
             Subject: {{ email_subject }}
-            Content-Type: text/plain; charset="UTF-8"
+            Content-Type: text/html; charset="UTF-8"
             -----------------
 
-            Status: {{ batchid }} is <br>processing</br>.
-            
+            <html><body><pre>
+            Status: <b>{{ batchid }}</b>
+                    is now <i>being processed</i>.
+            </pre></body></html>
+
             EOF
         when: send_update_email
 
@@ -234,6 +244,7 @@
            creates: download_list.txt
 
       - name: Send Email Downloading
+        tags: email
         vars:
           last_email_sent: "{{ lookup('file', email_chain) }}"
         shell:
@@ -244,11 +255,14 @@
             References: <{{ last_email_sent }}>
             In-Reply-To: <{{ last_email_sent }}>
             Subject: {{ email_subject }}
-            Content-Type: text/plain; charset="UTF-8"
+            Content-Type: text/html; charset="UTF-8"
             -----------------
 
-            Status: {{ batchid }} is <br>downloading</br>.
-            
+            <html><body><pre>
+            Status: <b>{{ batchid }}</b>
+                    is <i>being downloaded</i>.
+            </pre></body></html>
+
             EOF
         when: send_update_email
 
@@ -262,6 +276,7 @@
           - "{{ lookup('file', '{{ working_dir }}/download_list.txt').split('\n') | map('trim') | map('split', ' ') | map('last') }}"
 
       - name: Send Email Downloading Finished
+        tags: email
         vars:
           last_email_sent: "{{ lookup('file', email_chain) }}"
         shell:
@@ -272,11 +287,14 @@
             References: <{{ last_email_sent }}>
             In-Reply-To: <{{ last_email_sent }}>
             Subject: {{ email_subject }}
-            Content-Type: text/plain; charset="UTF-8"
+            Content-Type: text/html; charset="UTF-8"
             -----------------
 
-            Status: {{ batchid }} has finished <br>downloading</br>.
-            
+            <html><body><pre>
+            Status: <b>{{ batchid }}</b>
+                    is <i>being checked for errors</i>.
+            </pre></body></html>
+
             EOF
         when: send_update_email
 
@@ -462,11 +480,13 @@
     - name: Log data in spreadsheet
       block:
       - name: Read sample IDs again
+        tags: email
         shell:
            cmd: cat '{{ working_dir }}/sample_ids.txt'
         register: sample_ids
 
       - name: Inline sample_ids
+        tags: email
         debug:
           msg: "{{ sample_ids.stdout | split('\n') | join(', ') }}"
         register: sample_ids_inline
@@ -515,11 +535,15 @@
     - name: Send final email
       block:
       - name: Set Email batch tag to finished
+        tags: email
         shell:
           cmd: |
             bash /etc/bashrc.d/emailserver.sh novogene_set_state {{ batchid }} finished
 
       - name: Send Email End
+        tags: email
+        vars:
+          last_email_sent: "{{ lookup('file', email_chain) }}"
         shell:
           chdir: '{{ email_folder }}'
           cmd: |
@@ -528,26 +552,28 @@
             In-Reply-To: <{{ last_email_sent }}>
             To: {{ send_to_email }}
             Subject: Re: {{ email_subject }}
-            Content-Type: text/plain; charset="UTF-8"
+            Content-Type: text/html; charset="UTF-8"
             -----------------
 
-            Novogene batch "{{ batchid }}" has been downloaded, checked,
-            archived, and uploaded to Galaxy.
+            <html><body><pre>
+            Novogene batch <b>{{ batchid }}</b> has <i>completed.</i>
+            <small>(downloaded, checked, uploaded to Galaxy, and locally archived).</small>\
+            <hr/>\
+            <i>Sample IDs</i>     : {{ sample_ids_inline.msg }}
+            <i>Archived To</i>    : {{ novogene_mount }}/{{ novogene_subdir }}/{{ batchid }}
+            <i>Galaxy History</i> : {{ batchid }}
+            <i>Samplesheet</i>    : {{ remote_tsv | basename }} (updated)
+            <hr/>
+            Please note:
 
-            - Samples        : {{ sample_ids.stdout }}
-            - Archives       : {{ novogene_mount }}/{{ novogene_subdir }}/{{ batchid }}.*
-            - Galaxy History : {{ batchid }}
+               The Galaxy history <b>{{ batchid }}</b>
+               should <u>not</u> be used for processing.
 
-            (  Please note: the Galaxy history "{{ batchid }}"
-               should be used for strictly archiving purposes.
-
-               If you wish to proceess this data, then copy it
-               over into another history. This will not duplicate
-               the data, but link to it.                          )
-
-            The samplesheet at '{{ remote_tsv }}' has been updated.
+               Please <u>copy the data into another history</u>
+               and process it there.
 
             Happy analyzing!
+            </pre></body></html>
 
             EOF
         when: send_update_email
