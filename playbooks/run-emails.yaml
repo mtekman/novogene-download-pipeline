@@ -26,8 +26,7 @@
           This is an automatic email to let you know that the
           Novogene Sequence Retrieval Pipeline is running!
   
-          status: <b>{{ batchid }}</b>
-                  is <i>waiting</i> in the processing queue.
+          status: <b>{{ batchid }}</b> is <i>waiting</i> in the queue.
           </pre></body></html>
     
           EOF
@@ -64,8 +63,7 @@
           -----------------
     
           <html><body><pre>
-          status: <b>{{ batchid }}</b>
-                  is now <i>being processed</i>.
+          status: <b>{{ batchid }}</b> is being <i>processed</i>.
           </pre></body></html>
     
           EOF
@@ -89,14 +87,13 @@
           -----------------
   
           <html><body><pre>
-          status: <b>{{ batchid }}</b>
-                  is <i>being downloaded</i>.
+          status: <b>{{ batchid }}</b> is being <i>downloaded</i>.
           </pre></body></html>
   
           EOF
   
-    - name: Send Email Downloading Finished
-      when: param == "downloadfinished"
+    - name: Send Galaxy email
+      when: param == "galaxy"
       vars:
         last_email_sent: "{{ lookup('file', email_chain) }}"
       shell:
@@ -111,8 +108,7 @@
           -----------------
   
           <html><body><pre>
-          status: <b>{{ batchid }}</b>
-                  is <i>being checked for errors</i>.
+          status: <b>{{ batchid }}</b> is being <i>uploaded to Galaxy</i>.
           </pre></body></html>
   
           EOF

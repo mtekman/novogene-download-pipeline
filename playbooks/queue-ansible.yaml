@@ -1,5 +1,9 @@
 - name: Set starting flags
   block:
+  - name: Send queued email
+    include_tasks: playbooks/run-emails.yaml
+    vars: {param: queued}
+    
   - name: Check value of current ansible lockfile
     shell: |
        touch {{ ansible_lock_file }};
@@ -22,3 +26,7 @@
     copy:
       dest: '{{ ansible_lock_file }}'
       content: '{{ batchid }}'
+
+  - name: Send processing email
+    include_tasks: playbooks/run-emails.yaml
+    vars: {param: processing}

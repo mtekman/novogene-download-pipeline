@@ -1,8 +1,7 @@
 - name: Get the JSON manifest
   ## Logs in to the novogene website because they have no working FTP
   ## and downloads the JSON manifest containing batch info and data links
-  when: not test_mode
-  block:
+  block:  
   - name: Link puppeteer to download area
     become: no
     command:

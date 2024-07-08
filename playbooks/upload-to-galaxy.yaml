@@ -1,5 +1,9 @@
 - name: Upload Files to Galaxy
   block:
+  - name: Send galaxy email
+    include_tasks: playbooks/run-emails.yaml
+    vars: {param: galaxy}
+
   - name: Upload to Galaxy over FTP
     environment:
         REMDIR : '{{ ftp_directory }}'

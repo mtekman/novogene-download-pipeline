@@ -8,14 +8,14 @@
   - vars/fixed.yaml     ## fixed variables that shouldn't need to change
   - vars/dynamic.yaml   ## dynamically generated variables from fixed
   become: no
-  ##- include: playbooks/generate-testdata.yaml
   pre_tasks:
   - name: Install dependencies
+    when: not test_mode
     include_tasks: playbooks/install-dependencies.yaml
 
   - name: Prime the working dir
     become: no
-    ansible.builtin.file:
+    file:
        path: '{{ working_dir }}'
        state: directory
        recurse: yes
@@ -25,18 +25,11 @@
     include_tasks: playbooks/test-batch.yaml
 
   tasks:
-  - name: Run queued email
-    include_tasks: playbooks/run-emails.yaml
-    vars: {param: queued}
-
   - name: Queue ansible job
     include_tasks: playbooks/queue-ansible.yaml
 
-  - name: Send processing email
-    include_tasks: playbooks/run-emails.yaml
-    vars: {param: processing}
-
   - name: Get JSON manifest
+    when: not test_mode
     include_tasks: playbooks/run-puppeteer.yaml
 
   - name: Process the archives
