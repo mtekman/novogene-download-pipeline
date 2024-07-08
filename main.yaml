@@ -53,36 +53,9 @@
     pwdnovo  : "{{ s_novogene.split()[1] }}"
     ##
   become: no
-  pre_tasks:
-  - name: Install dependencies
-    become: yes
-    apt:
-      name:
-      - npm
-      - nodejs
-      - lftp
-      - pip
-      - virtualenv
-      state: present
-    when: not test_mode
-
-  - name: Install puppeteer
-    npm:
-      name: puppeteer
-      version: 20.9.0
-      global: yes
-      state: present
-    when: not test_mode
-
-  - name: Install bioblend
-    pip:
-      name: bioblend
-      version: 1.3.0
-      state: present
-      virtualenv: '{{ bioblend_env }}'
-    when: not test_mode
-
   tasks:
+  - include_tasks: playbooks/install-dependencies.yaml
+
   - name: Prime the working dir
     become: no
     ansible.builtin.file:
