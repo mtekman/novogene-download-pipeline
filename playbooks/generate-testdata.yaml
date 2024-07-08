@@ -134,7 +134,8 @@
 
     - name: Generate the tar MD5
       shell:
-        cmd: md5sum '{{ final_prefix }}.tar' > '{{ final_prefix }}.MD5'
+        cmd: md5sum '{{ final_prefix }}.tar' \
+          | sed 's|{{ testdata_cache }}/||'  > '{{ final_prefix }}.MD5'
 
     - name: Generate the fake email message
       block:
