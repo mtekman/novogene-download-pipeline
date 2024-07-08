@@ -3,7 +3,7 @@
     email_subject: "Novogene Batch Download: {{ batchid }}"
   block:
   - name: Signal queued
-    when: param == "queued"
+    when: param == "queue"
     block:
     - name: Set state to queued
       shell:
@@ -42,7 +42,7 @@
   
   
   - name: Signal processing
-    when: param == "processing"
+    when: param == "process"
     block:
     - name: Set state to processing
       shell:
@@ -71,7 +71,7 @@
           EOF
   
   - name: Signal download
-    when: param == "downloading"
+    when: param == "download"
     block:
     - name: Send Email Downloading
       when: send_update_email
@@ -116,10 +116,35 @@
           </pre></body></html>
   
           EOF
+
+
+  - name: Signal archiving
+    when: param == "archive"
+    block:
+    - name: Send Email Archiving
+      vars:
+        last_email_sent: "{{ lookup('file', email_chain) }}"
+      shell:
+        chdir: '{{ email_folder }}'
+        cmd: |
+          gmi send {{ send_to_email }} << EOF
+          To: {{ send_to_email }}
+          References: <{{ last_email_sent }}>
+          In-Reply-To: <{{ last_email_sent }}>
+          Subject: {{ email_subject }}
+          Content-Type: text/html; charset="UTF-8"
+          -----------------
   
+          <html><body><pre>
+          status: <b>{{ batchid }}</b> is being <i>archived</i> to disk.
+          </pre></body></html>
+  
+          EOF
+
+
   
   - name: Signal final
-    when: param == "final"
+    when: param == "finish"
     block:
     - name: Set state to finished
       shell:
@@ -142,7 +167,7 @@
           -----------------
   
           <html><body><pre>
-          Novogene batch <b>{{ batchid }}</b> has <i>completed.</i>
+          Novogene batch <b>{{ batchid }}</b> is <i>finished.</i>
           <small>(downloaded, checked, uploaded to Galaxy, and locally archived).</small>\
           <hr/>\
           <i>Sample IDs</i>     : {{ sample_ids_inline.msg }}

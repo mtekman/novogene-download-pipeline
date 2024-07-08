@@ -11,7 +11,7 @@
   
   - name: Send downloading email
     include_tasks: playbooks/send-signals.yaml
-    vars: {param: downloading}
+    vars: {param: download}
   
   - name: Download archive list and MD5
     when: not test_mode
@@ -21,11 +21,7 @@
     with_together:
       - "{{ lookup('file', '{{ working_dir }}/download_list.txt').split('\n') | map('trim') | map('split', ' ') | map('first') }}"
       - "{{ lookup('file', '{{ working_dir }}/download_list.txt').split('\n') | map('trim') | map('split', ' ') | map('last') }}"
-  
-  - name: Send download finished email
-    include_tasks: playbooks/send-signals.yaml
-    vars: {param: downloadfinished}
-  
+   
   - name: Get Archive MD5
     shell:
        chdir: '{{ working_dir }}'

@@ -49,7 +49,7 @@
 
   - name: Send final email
     include_tasks: playbooks/send-signals.yaml
-    vars: {param: final}
+    vars: {param: finish}
 
   post_tasks:
   - name: Remove ansible lock file
