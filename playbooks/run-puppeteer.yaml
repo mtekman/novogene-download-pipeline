@@ -1,0 +1,26 @@
+- name: Get the JSON manifest
+  ## Logs in to the novogene website because they have no working FTP
+  ## and downloads the JSON manifest containing batch info and data links
+  when: not test_mode
+  block:
+  - name: Link puppeteer to download area
+    become: no
+    command:
+       cmd: npm link puppeteer
+       chdir: '{{ working_dir }}'
+
+  - name: Copy puppeteer script to download area
+    copy:
+      src: get_batch_node.js
+      dest: '{{ working_dir }}/get_batch_node.js'
+
+  - name: Run puppeteer
+    environment:
+        BATCHNO : '{{ batchid }}'
+        USERLOG : '{{ usernovo }}'
+        PWDLOG :  '{{ pwdnovo }}'
+    command:
+       cmd: node get_batch_node.js
+       chdir: '{{ working_dir }}'
+    args:
+      creates: 'batch.json'
