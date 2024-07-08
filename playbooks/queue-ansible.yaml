@@ -1,0 +1,24 @@
+- name: Set starting flags
+  block:
+  - name: Check value of current ansible lockfile
+    shell: |
+       touch {{ ansible_lock_file }};
+       cat {{ ansible_lock_file }};
+    register: last_task
+
+  - name: Remove lockfile if current batch is same as last (e.g. for testing)
+    file:
+      path: '{{ ansible_lock_file }}'
+      state: absent
+    when: last_task.stdout == batchid or last_task.stdout == ""
+
+  - name: Wait for other ansible invocations to complete
+    wait_for:
+      path: '{{ ansible_lock_file }}'
+      state: absent
+      timeout: 300
+
+  - name: Take control of the lock file
+    copy:
+      dest: '{{ ansible_lock_file }}'
+      content: '{{ batchid }}'
