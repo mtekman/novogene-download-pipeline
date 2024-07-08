@@ -1,59 +1,15 @@
 - name: Download Files From Novogene
   hosts: localhost
   vars:
-    ## Populated from inventory:
-    # ------------------------------
-    # batchid
-    # send_to_email
-    # labdata_mount
-    ## ------------------------------
-    ## fixed
-    novogene_mount: /mnt/novogene
-    labdata_mount: /mnt/labdata
-    test_mode: '"{{ batchid }}" == "X200SC00000000-Z01-F001"'
+    ## Populated from inventory: batchid, send_to_email, test_mode, 
+    test_mode: true
     send_update_email: True
-    email_folder : ~/LABEMAIL/
-    email_subject: "Novogene Batch Download: {{ batchid }}"
-    ##
-    secrets_novogene : ~/.secrets/novagene_credentials
-    secrets_usegalaxy : ~/.secrets/usegalaxy_credentials
-    ##
-    dir_tempdown: /home/dietpi/download_area
-    ## Labsheet
-    local_sheet: /home/dietpi/novogene_pipeline/samplesheet.org
-    local_tsv: /home/dietpi/novogene_pipeline/samplesheet.tsv
-    remote_sheet: '{{ labdata_mount }}/novogene_samplesheet.org'
-    remote_tsv: '{{ labdata_mount }}/novogene_samplesheet.tsv'
-    ## Do not modify vars below this line
-    ## - Fixed dirs
-    novogene_subdir: TEST
-    working_dir : "{{ dir_tempdown }}/{{ batchid }}"
-    email_chain : '{{ working_dir }}/email.chain'
-    unpacked_dir : unpacked
-    upload_dir : upload_to_galaxy
-    ## - Envs and vars
-    bioblend_env : ~/.bioblendenv
-    match_fastq: 'f(ast)?q(\.gz)?'
-    ansible_lock_file: /tmp/ANSIBLE_LOCK.lock
-    ## -
-    ansible_remote_tmp: /tmp
-    ## Time stuff
-    cdt : '{{ ansible_date_time }}'
-    ftp_directory: '{{ cdt.date }}-{{ cdt.hour }}{{ cdt.minute }}__{{ batchid }}'
-    org_timestamp: '{{ cdt.date }} {{ cdt.weekday[0:3] }} {{ cdt.hour }}:{{ cdt.minute }}'
-    ## Read secrets contents
-    s_usegalaxy: "{{ lookup('file', secrets_usegalaxy) }}"
-    s_novogene : "{{ lookup('file', secrets_novogene) }}"
-    ## Get keys: Galaxy
-    usergalaxy: "{{ s_usegalaxy.split()[0] }}"
-    pwdgalaxy : "{{ s_usegalaxy.split()[1] }}"
-    apigalaxy : "{{ s_usegalaxy.split()[2] }}"
-    ## Get keys: Novogene
-    usernovo : "{{ s_novogene.split()[0] }}"
-    pwdnovo  : "{{ s_novogene.split()[1] }}"
-    ##
+  vars_files:
+  - vars/fixed.yaml     ## fixed variables that shouldn't need to change
+  - vars/dynamic.yaml   ## dynamically generated variables from fixed
   become: no
-  tasks:
+  ##- include: playbooks/generate-testdata.yaml
+  pre_tasks:
   - name: Install dependencies
     include_tasks: playbooks/install-dependencies.yaml
 
@@ -63,31 +19,12 @@
        path: '{{ working_dir }}'
        state: directory
        recurse: yes
-
-  - name: Don't run puppeteer, install test data
+       
+  - name: Setup test batch data
     when: test_mode
-    block:
-    - name: Install test archive
-      copy:
-        src: test_data/X200SC00000000-Z01-F001.tar
-        dest: '{{ working_dir }}/X200SC00000000-Z01-F001.tar'
-    - name: Install test MD5
-      copy:
-        src: test_data/X200SC00000000-Z01-F001.MD5
-        dest: '{{ working_dir }}/MD5.txt'
-    - name: Install test JSON
-      copy:
-        src: test_data/X200SC00000000-Z01-F001.json
-        dest: '{{ working_dir }}/batch.json'
-    - name: Install fake email to cwd
-      copy:
-        src: test_data/X200SC00000000-Z01-F001.email
-        dest: '{{ working_dir }}/email.txt'
-    - name: Install fake email to notmuch
-      shell:
-        chdir: '{{ working_dir }}'
-        cmd: cat email.txt | notmuch insert --folder mail
+    include_tasks: playbooks/test-batch.yaml
 
+  tasks:
   - name: Run queued email
     include_tasks: playbooks/run-emails.yaml
     vars: {param: queued}
@@ -121,9 +58,8 @@
     include_tasks: playbooks/run-emails.yaml
     vars: {param: final}
 
-  ## Even if killed, the lock file is removed
   post_tasks:
-  - name: Remove lock file
+  - name: Remove ansible lock file
     file:
       path: '{{ ansible_lock_file }}'
       state: absent

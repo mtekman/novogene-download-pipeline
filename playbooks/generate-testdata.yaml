@@ -17,7 +17,7 @@
     ## Final prefix: .tar, .MD5, .json, .email
     final_prefix: '{{ testdata_cache }}/{{ batchid }}'
   become: no
-  pre_tasks:
+  tasks:
   - name: Ensure working directory exists
     file:
        path: '{{ working_dir }}'
@@ -54,7 +54,6 @@
       sample_array: '{{ sample_nums | split(" ") }}'
     when: not end_files_exist
 
-  tasks:
   - name: Generate new FASTQ data
     when: not end_files_exist
     block:

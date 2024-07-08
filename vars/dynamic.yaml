@@ -1,0 +1,20 @@
+remote_sheet: '{{ labdata_mount }}/novogene_samplesheet.org'
+remote_tsv: '{{ labdata_mount }}/novogene_samplesheet.tsv'
+## 
+working_dir : "{{ dir_tempdown }}/{{ batchid }}"
+email_chain : '{{ working_dir }}/email.chain'
+## Time stuff
+cdt : '{{ ansible_date_time }}'
+ftp_directory: '{{ cdt.date }}-{{ cdt.hour }}{{ cdt.minute }}__{{ batchid }}'
+org_timestamp: '{{ cdt.date }} {{ cdt.weekday[0:3] }} {{ cdt.hour }}:{{ cdt.minute }}'
+## Read secrets contents
+s_usegalaxy: "{{ lookup('file', secrets_usegalaxy) }}"
+s_novogene : "{{ lookup('file', secrets_novogene) }}"
+## Get keys: Galaxy
+usergalaxy: "{{ s_usegalaxy.split()[0] }}"
+pwdgalaxy : "{{ s_usegalaxy.split()[1] }}"
+apigalaxy : "{{ s_usegalaxy.split()[2] }}"
+## Get keys: Novogene
+usernovo : "{{ s_novogene.split()[0] }}"
+pwdnovo  : "{{ s_novogene.split()[1] }}"
+##

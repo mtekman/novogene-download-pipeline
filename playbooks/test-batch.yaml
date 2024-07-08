@@ -1,0 +1,22 @@
+- name: Don't run puppeteer, install test data
+  block:
+  - name: Install test archive
+    copy:
+      src: test_data/X200SC00000000-Z01-F001.tar
+      dest: '{{ working_dir }}/X200SC00000000-Z01-F001.tar'
+  - name: Install test MD5
+    copy:
+      src: test_data/X200SC00000000-Z01-F001.MD5
+      dest: '{{ working_dir }}/MD5.txt'
+  - name: Install test JSON
+    copy:
+      src: test_data/X200SC00000000-Z01-F001.json
+      dest: '{{ working_dir }}/batch.json'
+  - name: Install fake email to cwd
+    copy:
+      src: test_data/X200SC00000000-Z01-F001.email
+      dest: '{{ working_dir }}/email.txt'
+  - name: Install fake email to notmuch
+    shell:
+      chdir: '{{ working_dir }}'
+      cmd: cat email.txt | notmuch insert --folder mail
