@@ -1,7 +1,7 @@
 - name: Upload Files to Galaxy
   block:
   - name: Send galaxy email
-    include_tasks: playbooks/run-emails.yaml
+    include_tasks: playbooks/send-signals.yaml
     vars: {param: galaxy}
 
   - name: Upload to Galaxy over FTP

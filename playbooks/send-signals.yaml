@@ -1,17 +1,17 @@
-- name: All Email tasks
-  tags: email
+- name: All processing signals
   vars:
     email_subject: "Novogene Batch Download: {{ batchid }}"
   block:
-  - name: Run queued email
-    when: send_update_email and param == "queued"
+  - name: Signal queued
+    when: param == "queued"
     block:
-    - name: Set Email batch tag to queued
+    - name: Set state to queued
       shell:
         cmd: |
           bash {{ email_script }} novogene_set_state {{ batchid }} queued
     
     - name: Send Email Queued
+      when: send_update_email
       shell:
         chdir: '{{ email_folder }}'
         cmd: |
@@ -32,6 +32,7 @@
           EOF
     
     - name: Get ID of last email and set it for future chains
+      when: send_update_email
       shell:
         chdir: '{{ email_folder }}'
         cmd: |
@@ -40,15 +41,16 @@
                   | jq .'[0][][0].id' | xargs echo | tee {{ email_chain }}
   
   
-  - name: Run processing email
-    when: send_update_email and param == "processing"
+  - name: Signal processing
+    when: param == "processing"
     block:
-    - name: Set Email batch tag to processing
+    - name: Set state to processing
       shell:
         cmd: |
           bash {{ email_script }} novogene_set_state {{ batchid }} processing
     
     - name: Send Email Processing
+      when: send_update_email
       vars:
         last_email_sent: "{{ lookup('file', email_chain) }}"
       shell:
@@ -68,11 +70,11 @@
     
           EOF
   
-  - name: Run downloading email
-    when: send_update_email
+  - name: Signal download
+    when: param == "downloading"
     block:
     - name: Send Email Downloading
-      when: param == "downloading"
+      when: send_update_email
       vars:
         last_email_sent: "{{ lookup('file', email_chain) }}"
       shell:
@@ -91,9 +93,11 @@
           </pre></body></html>
   
           EOF
-  
-    - name: Send Galaxy email
-      when: param == "galaxy"
+          
+  - name: Signal galaxy
+    when: param == "galaxy"
+    block:
+    - name: Send Email Galaxy
       vars:
         last_email_sent: "{{ lookup('file', email_chain) }}"
       shell:
@@ -114,51 +118,50 @@
           EOF
   
   
-  - name: Send final email
-    when: send_update_email and param == "final"
+  - name: Signal final
+    when: param == "final"
     block:
-    - name: Send final email
-      block:
-      - name: Set Email batch tag to finished
-        shell:
-          cmd: |
-            bash {{ email_script }} novogene_set_state {{ batchid }} finished
+    - name: Set state to finished
+      shell:
+        cmd: |
+          bash {{ email_script }} novogene_set_state {{ batchid }} finished
   
-      - name: Send Email End
-        vars:
-          last_email_sent: "{{ lookup('file', email_chain) }}"
-        shell:
-          chdir: '{{ email_folder }}'
-          cmd: |
-            gmi send {{ send_to_email }} << EOF
-            References: <{{ last_email_sent }}>
-            In-Reply-To: <{{ last_email_sent }}>
-            To: {{ send_to_email }}
-            Subject: Re: {{ email_subject }}
-            Content-Type: text/html; charset="UTF-8"
-            -----------------
+    - name: Send Email final
+      when: send_update_email
+      vars:
+        last_email_sent: "{{ lookup('file', email_chain) }}"
+      shell:
+        chdir: '{{ email_folder }}'
+        cmd: |
+          gmi send {{ send_to_email }} << EOF
+          References: <{{ last_email_sent }}>
+          In-Reply-To: <{{ last_email_sent }}>
+          To: {{ send_to_email }}
+          Subject: Re: {{ email_subject }}
+          Content-Type: text/html; charset="UTF-8"
+          -----------------
   
-            <html><body><pre>
-            Novogene batch <b>{{ batchid }}</b> has <i>completed.</i>
-            <small>(downloaded, checked, uploaded to Galaxy, and locally archived).</small>\
-            <hr/>\
-            <i>Sample IDs</i>     : {{ sample_ids_inline.msg }}
-            <i>Archived To</i>    : {{ novogene_mount }}/{{ novogene_subdir }}/{{ batchid }}
-            <i>Galaxy History</i> : {{ batchid }}
-            <i>Samplesheet</i>    : {{ remote_tsv | basename }} (updated)
-            <hr/>
-            Please note:
+          <html><body><pre>
+          Novogene batch <b>{{ batchid }}</b> has <i>completed.</i>
+          <small>(downloaded, checked, uploaded to Galaxy, and locally archived).</small>\
+          <hr/>\
+          <i>Sample IDs</i>     : {{ sample_ids_inline.msg }}
+          <i>Archived To</i>    : {{ novogene_mount }}/{{ novogene_subdir }}/{{ batchid }}
+          <i>Galaxy History</i> : {{ batchid }}
+          <i>Samplesheet</i>    : {{ remote_tsv | basename }} (updated)
+          <hr/>
+          Please note:
   
-               The Galaxy history <b>{{ batchid }}</b>
-               should <u>not</u> be used for processing.
+             The Galaxy history <b>{{ batchid }}</b>
+             should <u>not</u> be used for processing.
   
-               Please <u>copy the data into another history</u>
-               and process it there.
+             Please <u>copy the data into another history</u>
+             and process it there.
   
-            Happy analyzing!
-            </pre></body></html>
+          Happy analyzing!
+          </pre></body></html>
   
-            EOF
+          EOF
             
   
   
