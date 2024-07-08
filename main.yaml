@@ -90,9 +90,9 @@
   - name: Run queued email
     include_tasks: playbooks/run-emails.yaml
     vars: {param: queued}
-    
+
   - name: Set starting flags
-    block:        
+    block:
     - name: Check value of current ansible lockfile
       shell: |
          touch {{ ansible_lock_file }};
@@ -119,8 +119,9 @@
   - name: Run processing emails
     include_tasks: playbooks/run-emails.yaml
     vars: {param: processing}
-    
-  - include_tasks: playbooks/run-puppeteer.yaml
+
+  - name: Get JSON manifest
+    include_tasks: playbooks/run-puppeteer.yaml
 
   - name: Process the archives
     include_tasks: playbooks/process-archives.yaml
@@ -128,77 +129,8 @@
   - name: Process the FASTQs
     include_tasks: playbooks/process-fastqs.yaml
 
-  - name: Upload Files to Galaxy
-    block:
-    - name: Upload to Galaxy over FTP
-      environment:
-          REMDIR : '{{ ftp_directory }}'
-          USERLOG: '{{ usergalaxy }}'
-          PWDLOG : '{{ pwdgalaxy }}'
-      shell:
-          chdir: "{{ working_dir }}/{{ upload_dir }}"
-          cmd: lftp -e "set ssl:verify-certificate false; mkdir $REMDIR; cd $REMDIR; mirror --no-recursion -R -c --parallel=10; exit" "$USERLOG":"$PWDLOG"@ftp.usegalaxy.eu
-
-
-  - name: Move FTPd files into Galaxy History
-    block:
-    - name: Copy over bioblend script
-      copy:
-        src: galaxy_move_to_history.py
-        dest: '{{ working_dir }}/'
-
-    - name: Extract Sample IDs
-      shell:
-        chdir: '{{ working_dir }}'
-        cmd: |
-          awk '{print $2}' files_given.md5s \
-          | sed -r 's|^([A-Z]+)[-_ ]?([0-9]+)_.*[12].{{ match_fastq }}|\1\t\2|g' \
-          | sort -k1 -nk2 | tr '\t' '_' | uniq -c \
-          | awk '{print $2" x "$1}' | tee sample_ids.txt
-      register: sample_ids
-
-    - name: Extract Tags
-      shell:
-        chdir: '{{ working_dir }}'
-        cmd: cat sample_ids.txt | sed -r 's|^([^_]+)_.*|\1|' | sort | uniq
-      register: tag_ids
-
-    - name: Print Upload Info
-      debug:
-         msg: 'Tags: {{ tag_ids }} | Sample IDS: {{ sample_ids }}'
-
-    - name: Get empty FTP directories
-      environment:
-          USERLOG: '{{ usergalaxy }}'
-          PWDLOG : '{{ pwdgalaxy }}'
-      shell:
-          cmd: lftp -e "set ssl:verify-certificate false; find -d 2" "$USERLOG":"$PWDLOG"@ftp.usegalaxy.eu | tr '\n' ' '
-      register: ftp_directories
-
-    - name: Print FTP directory info
-      debug:
-         msg: 'Directories found: {{ ftp_directories.stdout }}'
-
-    - name: Remove empty FTP directories (Ignore errors)
-      environment:
-          USERLOG: '{{ usergalaxy }}'
-          PWDLOG : '{{ pwdgalaxy }}'
-      shell:
-          cmd: lftp -e "set ssl:verify-certificate false; rmdir {{ ftp_directories.stdout }}" "$USERLOG":"$PWDLOG"@ftp.usegalaxy.eu 2>/dev/null
-      ignore_errors: yes
-
-    - name: Move FTP files into History
-      environment:
-          BATCH_NO : '{{ batchid }}'
-          USEGALAXY_API_KEY : '{{ apigalaxy }}'
-          TAGS : 'datasets {{ tag_ids.stdout }}'
-          SAMPLES : '{{ sample_ids.stdout }}'
-          REMDIR : '{{ ftp_directory }}'
-          VIRTUAL_ENV: '{{ bioblend_env }}'
-      shell:
-          chdir: '{{ working_dir }}/'
-          cmd: |
-            {{ bioblend_env }}/bin/python galaxy_move_to_history.py
+  - name: Upload FASTQs to Galaxy
+    include_tasks: playbooks/upload-to-galaxy.yaml
 
   - name: Save data to archive
     block:
