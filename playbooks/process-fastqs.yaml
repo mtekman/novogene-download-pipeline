@@ -1,0 +1,40 @@
+- name: Process the FASTQs
+  block:
+  - name: Create the upload folder
+    file:
+       path: "{{ working_dir }}/{{ upload_dir }}"
+       state: directory
+
+  - name: Populate the upload folder with FASTQ data
+    shell:
+       chdir: '{{ working_dir }}'
+       cmd: |
+         find "{{ working_dir }}/{{ unpacked_dir }}" -type f | grep -P "{{ match_fastq }}" \
+          | xargs -I '{}' mv -i -v '{}' "{{ working_dir }}/{{ upload_dir }}" && \
+         find "{{ working_dir }}/{{ upload_dir }}" -type f > fastq_upld_list.txt
+    args:
+       creates: fastq_upld_list.txt
+
+  - name: Get FASTQ MD5s
+    shell:
+       chdir: '{{ working_dir }}'
+       cmd: |
+         mds_file=$(find "{{ working_dir }}/{{ unpacked_dir }}" -maxdepth 2 -type f -name MD5.txt)
+         cat $mds_file | sed -r 's|([a-z0-9]+)\s+.*/(.*\.{{ match_fastq }})|\1\t\2|g' | \
+           grep -v "report/" | grep -v '.zip' | sort | tee files_given.md5s
+    register: md5_files_given
+
+  - name: Calculate FASTQ MD5s
+    shell:
+       chdir: '{{ working_dir }}'
+       cmd: |
+         cat fastq_upld_list.txt | xargs -I '{}' md5sum '{}' | sed "s|{{ working_dir }}/{{ upload_dir }}/||" \
+          |  sed -r 's|\s+|\t|' | sort | tee files_calc.md5s;
+    register: md5_files_calc
+
+  - name: Test that FASTQ MD5s match
+    assert:
+       that:
+       - md5_files_given.stdout == md5_files_calc.stdout
+       fail_msg: "MD5s for FASTQ do NOT match"
+       success_msg: 'MD5s match for FASTQ'

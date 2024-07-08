@@ -1,0 +1,62 @@
+- name: Archive tasks
+  block:
+  - name: Generate list of archives
+    shell:
+       chdir: '{{ working_dir }}'
+       cmd: |
+         jq '.Files[] | [.FileName,.Endpoint] | join(" ")' batch.json \
+          | grep -P ".(zip|tar|txt)" | sed 's|"||g' > download_list.txt
+    args:
+       creates: download_list.txt
+  
+  - name: Run downloading email
+    include_tasks: playbooks/run-emails.yaml
+    vars: {param: downloading}
+  
+  - name: Download archive list and MD5
+    when: not test_mode
+    get_url:
+       url: "{{ item.1 }}"
+       dest: '{{ working_dir }}/{{ item.0 }}'
+    with_together:
+      - "{{ lookup('file', '{{ working_dir }}/download_list.txt').split('\n') | map('trim') | map('split', ' ') | map('first') }}"
+      - "{{ lookup('file', '{{ working_dir }}/download_list.txt').split('\n') | map('trim') | map('split', ' ') | map('last') }}"
+  
+  - name: Run download finished email
+    include_tasks: playbooks/run-emails.yaml
+    vars: {param: downloadfinished}
+  
+  - name: Get Archive MD5
+    shell:
+       chdir: '{{ working_dir }}'
+       cmd: cat MD5.txt | sort | tee md5_archive.given
+    register: md5_archive_given
+  
+  - name: Calculate Archive MD5
+    shell:
+       chdir: '{{ working_dir }}'
+       cmd: md5sum *.tar* | sort | tee md5_archive.calc
+    register: md5_archive_calc
+  
+  - name: Test that Archive MD5s match
+    assert:
+       that:
+       - md5_archive_given.stdout == md5_archive_calc.stdout
+       fail_msg: "MD5s for archive do NOT match"
+       success_msg: 'MD5s match for archive'
+  
+  - name: Create unpack directory
+    file:
+       path: "{{ working_dir }}/{{ unpacked_dir }}"
+       state: directory
+  
+  - name: Unpack Archives
+    unarchive:
+       src: "{{ item }}"
+       dest: "{{ working_dir }}/{{ unpacked_dir }}/"
+       remote_src: yes
+       extra_opts:
+       - "--strip-components=1"
+    loop: "{{ lookup('fileglob', '{{ working_dir }}/*', wantlist=True) }}"
+    when: item.endswith('.zip') or item.endswith('.tar.gz') or item.endswith('.tar.bz2') or item.endswith('.tar')
+  
