@@ -2,7 +2,6 @@ remote_sheet: '{{ labdata_mount }}/novogene_samplesheet.org'
 remote_tsv: '{{ labdata_mount }}/novogene_samplesheet.tsv'
 ## 
 working_dir : "{{ dir_tempdown }}/{{ batchid }}"
-email_chain : '{{ working_dir }}/email.chain'
 ## Time stuff
 cdt : '{{ ansible_date_time }}'
 ftp_directory: '{{ cdt.date }}-{{ cdt.hour }}{{ cdt.minute }}__{{ batchid }}'

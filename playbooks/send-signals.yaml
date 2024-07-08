@@ -1,6 +1,8 @@
 - name: All processing signals
   vars:
-    email_subject: "Novogene Batch Download: {{ batchid }}"
+    email_subject: "Novogene Batch: {{ batchid }}"
+    email_chain : '{{ working_dir }}/email.chain'
+    notif_chain:  '{{ working_dir }}/notify.chain'
   block:
   - name: Signal queued
     when: param == "queue"
@@ -8,10 +10,10 @@
     - name: Set state to queued
       shell:
         cmd: |
-          bash {{ email_script }} novogene_set_state {{ batchid }} queued
+          bash {{ script_email }} novogene_set_state {{ batchid }} queued
     
     - name: Send Email Queued
-      when: send_update_email
+      when: send_email
       shell:
         chdir: '{{ email_folder }}'
         cmd: |
@@ -30,9 +32,15 @@
           </pre></body></html>
     
           EOF
-    
+
+    - name: Send Notification Queued
+      when: send_notification
+      shell:
+        cmd: |
+          bash {{ script_phosh }} notify send "{{ email_subject }}" "Queued" | tee {{ notif_chain }}
+
     - name: Get ID of last email and set it for future chains
-      when: send_update_email
+      when: send_email
       shell:
         chdir: '{{ email_folder }}'
         cmd: |
@@ -47,10 +55,10 @@
     - name: Set state to processing
       shell:
         cmd: |
-          bash {{ email_script }} novogene_set_state {{ batchid }} processing
+          bash {{ script_email }} novogene_set_state {{ batchid }} processing
     
     - name: Send Email Processing
-      when: send_update_email
+      when: send_email
       vars:
         last_email_sent: "{{ lookup('file', email_chain) }}"
       shell:
@@ -69,12 +77,19 @@
           </pre></body></html>
     
           EOF
-  
+
+    - name: Send Notification Processing
+      when: send_notification
+      shell:
+        cmd: |
+          bash {{ script_phosh }} notify send "{{ email_subject }}" "Processing" | tee -a {{ notif_chain }}
+
+
   - name: Signal download
     when: param == "download"
     block:
     - name: Send Email Downloading
-      when: send_update_email
+      when: send_email
       vars:
         last_email_sent: "{{ lookup('file', email_chain) }}"
       shell:
@@ -93,7 +108,14 @@
           </pre></body></html>
   
           EOF
-          
+
+    - name: Send Notification Downloading
+      when: send_notification
+      shell:
+        cmd: |
+          bash {{ script_phosh }} notify send "{{ email_subject }}" "Downloading" | tee -a {{ notif_chain }}
+
+
   - name: Signal galaxy
     when: param == "galaxy"
     block:
@@ -116,6 +138,12 @@
           </pre></body></html>
   
           EOF
+
+    - name: Send Notification Galaxy
+      when: send_notification
+      shell:
+        cmd: |
+          bash {{ script_phosh }} notify send "{{ email_subject }}" "Galaxy" | tee -a {{ notif_chain }}
 
 
   - name: Signal archiving
@@ -141,6 +169,11 @@
   
           EOF
 
+    - name: Send Notification Archiving
+      when: send_notification
+      shell:
+        cmd: |
+          bash {{ script_phosh }} notify send "{{ email_subject }}" "Archiving" | tee -a {{ notif_chain }}
 
   
   - name: Signal final
@@ -149,10 +182,10 @@
     - name: Set state to finished
       shell:
         cmd: |
-          bash {{ email_script }} novogene_set_state {{ batchid }} finished
+          bash {{ script_email }} novogene_set_state {{ batchid }} finished
   
     - name: Send Email final
-      when: send_update_email
+      when: send_email
       vars:
         last_email_sent: "{{ lookup('file', email_chain) }}"
       shell:
@@ -188,5 +221,10 @@
   
           EOF
             
+    - name: Send Notification Finished
+      when: send_notification
+      shell:
+        cmd: |
+          bash {{ script_phosh }} notify send "{{ email_subject }}" "Finished" | tee -a {{ notif_chain }}
   
   
