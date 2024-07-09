@@ -3,8 +3,7 @@
   - name: Mount novogene archives rw
     shell: sudo mount -o 'remount,rw' '{{ novogene_mount }}' || sudo mount -o 'rw' '{{ novogene_mount }}'
 
-  - name: Send archiving signal
-    include_tasks: playbooks/send-signals.yaml
+  - include_tasks: playbooks/send-signals.yaml
     vars: {signal: archive}
 
   - name: Move Unpacked Files to Archive

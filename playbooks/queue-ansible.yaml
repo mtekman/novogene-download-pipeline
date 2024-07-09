@@ -1,7 +1,6 @@
 - name: Set starting flags
   block:
-  - name: Send queued email
-    include_tasks: playbooks/send-signals.yaml
+  - include_tasks: playbooks/send-signals.yaml
     vars: {signal: queue}
     
   - name: Check value of current ansible lockfile
@@ -27,6 +26,5 @@
       dest: '{{ ansible_lock_file }}'
       content: '{{ batchid }}'
 
-  - name: Send processing email
-    include_tasks: playbooks/send-signals.yaml
+  - include_tasks: playbooks/send-signals.yaml
     vars: {signal: process}

@@ -1,5 +1,8 @@
 - name: Log data in spreadsheet
   block:
+  - include_tasks: playbooks/send-signals.yaml
+    vars: {signal: logged}
+    
   - name: Read sample IDs again
     tags: email
     shell:

@@ -44,32 +44,6 @@
     block:
     - name: Set state to processing
       shell: bash {{ script_email }} novogene_set_state {{ batchid }} processing
-    - include_tasks: playbooks/bits/notify.yaml
-    - include_tasks: playbooks/bits/email.yaml
-
-  - name: Signal download
-    when: signal == "download"
-    block:
-    - include_tasks: playbooks/bits/notify.yaml
-    - include_tasks: playbooks/bits/email.yaml
-
-  - name: Signal checking
-    when: signal == "check"
-    block:
-    - include_tasks: playbooks/bits/notify.yaml
-    - include_tasks: playbooks/bits/email.yaml
-
-  - name: Signal galaxy
-    when: signal == "galaxy"
-    block:
-    - include_tasks: playbooks/bits/notify.yaml
-    - include_tasks: playbooks/bits/email.yaml
-
-  - name: Signal archiving
-    when: signal == "archive"
-    block:
-    - include_tasks: playbooks/bits/notify.yaml
-    - include_tasks: playbooks/bits/email.yaml
 
   - name: Signal final
     when: signal == "finish"
@@ -77,8 +51,8 @@
     - name: Set state to finished
       shell: bash {{ script_email }} novogene_set_state {{ batchid }} finished
 
-    - name: Send Email final
-      vars: {prefix: ""}
-      block:
-      - include_tasks: playbooks/bits/notify.yaml
-      - include_tasks: playbooks/bits/email.yaml
+  - name: General Signalling Tasks
+    when: signal in sigdict
+    block:
+    - include_tasks: playbooks/bits/notify.yaml
+    - include_tasks: playbooks/bits/email.yaml

@@ -5,8 +5,7 @@
        path: "{{ working_dir }}/{{ upload_dir }}"
        state: directory
 
-  - name: Send checkfastq signal
-    include_tasks: playbooks/send-signals.yaml
+  - include_tasks: playbooks/send-signals.yaml
     vars: {signal: checkfastq}
 
 

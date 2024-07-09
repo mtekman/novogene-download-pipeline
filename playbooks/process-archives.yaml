@@ -9,8 +9,7 @@
     args:
        creates: download_list.txt
   
-  - name: Send downloading email
-    include_tasks: playbooks/send-signals.yaml
+  - include_tasks: playbooks/send-signals.yaml
     vars: {signal: download}
   
   - name: Download archive list and MD5
@@ -23,8 +22,7 @@
       - "{{ lookup('file', '{{ working_dir }}/download_list.txt').split('\n') | map('trim') | map('split', ' ') | map('last') }}"
 
 
-  - name: Send checkarchive signal
-    include_tasks: playbooks/send-signals.yaml
+  - include_tasks: playbooks/send-signals.yaml
     vars: {signal: checkarchive}
 
   - name: Get Archive MD5
@@ -51,6 +49,9 @@
        path: "{{ working_dir }}/{{ unpacked_dir }}"
        state: directory
   
+  - include_tasks: playbooks/send-signals.yaml
+    vars: {signal: unpack}
+    
   - name: Unpack Archives
     unarchive:
        src: "{{ item }}"

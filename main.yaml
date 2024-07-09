@@ -49,8 +49,7 @@
   - name: Update samplesheet
     include_tasks: playbooks/update-samplesheet.yaml
 
-  - name: Send final email
-    include_tasks: playbooks/send-signals.yaml
+  - include_tasks: playbooks/send-signals.yaml
     vars: {signal: finish}
 
   post_tasks:

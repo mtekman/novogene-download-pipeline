@@ -1,9 +1,11 @@
 sigdict:  ## "Batch is":
   queue : waiting in queue
-  process : being processed now
+  process : now processing
   download : downloading archives
-  checkarchive : checking archives for consistency
-  checkfastq : checking FASTQ files for consistency
-  galaxy : being uploaded to UseGalaxy
-  archive : being backed up to local archives
+  checkarchive : testing archives
+  unpack: unpacking archives
+  checkfastq : testing unpacked FASTQ
+  galaxy : uploading to UseGalaxy
+  archive : backing up to local disk
+  logged : being logged in samplesheet
   finish : finished
