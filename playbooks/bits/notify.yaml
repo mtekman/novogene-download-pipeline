@@ -2,16 +2,15 @@
   when: send_notification
   tags: notify
   vars:
-    state: 'TEST'
-    prefix: '({{ ansible_date_time.time }}) '
-    is_first: false
-    message: '{{ prefix }}{{ state }}'
+    signal: "queue"
+    prefix: "{{ lookup('pipe', 'date \"+%H:%M:%S\"') }} | "
     ## Dynamic
-    last_id: "{{ lookup('file', notif_id) if not is_first else '' }}"
-    last_message: "{{ lookup('file', notif_msg) if not is_first else '' }}"
+    message: '{{ prefix }}{{ sigdict[signal] }}'
+    last_id: "{{ lookup('file', notif_id) if signal != 'queue' else '' }}"
+    last_message: "{{ lookup('file', notif_msg) if signal != 'queue' else '' }}"
   shell:
     cmd: |
-      {% if is_first %}
+      {% if signal == "queue" %}
       echo '{{ message }}' > '{{ notif_msg }}';
       bash {{ script_phosh }} notify send "{{ notify_subject }}" "{{ message }}" > {{ notif_id }}
       {% else %}

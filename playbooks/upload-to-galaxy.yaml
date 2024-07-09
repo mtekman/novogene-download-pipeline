@@ -2,7 +2,7 @@
   block:
   - name: Send galaxy email
     include_tasks: playbooks/send-signals.yaml
-    vars: {param: galaxy}
+    vars: {signal: galaxy}
 
   - name: Upload to Galaxy over FTP
     environment:

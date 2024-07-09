@@ -1,40 +1,16 @@
 - name: All processing signals
   vars:
     email_subject: "Novogene Batch: {{ batchid }}"
-    notify_subject: "{{ batchid }} ({{ ansible_date_time.date }})"
+    notify_subject: "{{ batchid }}"
     email_chain : '{{ working_dir }}/email.chain'
     notif_id: '{{ working_dir }}/notify.id'
     notif_msg: '{{ working_dir }}/notify.msg'
   block:
   - name: Signal queued
-    when: param == "queue"
+    when: signal == "queue"
     block:
     - name: Set state to queued
-      shell:
-        cmd: |
-          bash {{ script_email }} novogene_set_state {{ batchid }} queued
-    
-    - name: Send Email Queued
-      when: send_email
-      tags: email
-      shell:
-        chdir: '{{ email_folder }}'
-        cmd: |
-          gmi send {{ send_to_email }} << EOF
-          To: {{ send_to_email }}
-          Subject: {{ email_subject }}
-          Content-Type: text/html; charset="UTF-8"
-          -----------------
-    
-          <html><body><pre>
-          <i>(Bleep, bloop.)</i>
-          This is an automatic email to let you know that the
-          Novogene Sequence Retrieval Pipeline is running!
-  
-          status: <b>{{ batchid }}</b> is <i>waiting</i> in the queue.
-          </pre></body></html>
-    
-          EOF
+      shell: bash {{ script_email }} novogene_set_state {{ batchid }} queued
 
     - name: Clear any old notifications for batch
       when: send_notification
@@ -43,19 +19,15 @@
       - name: Get last not ID
         stat: {path: '{{ notif_id }}'}
         register: notif_file
+
       - name: Kill last notification
         vars:
           notid: "{{ lookup('file', notif_id)}}"
         shell:
           cmd: bash {{ script_phosh }} notify kill {{ notid }}
         when: notif_file.stat.exists
-        
-    - name: Send Notification Queued
-      when: send_notification
-      include_tasks: playbooks/bits/notify.yaml
-      vars:
-        state: 'Queued'
-        is_first: true
+    - include_tasks: playbooks/bits/notify.yaml
+    - include_tasks: playbooks/bits/email.yaml
 
     - name: Get ID of last email and set it for future chains
       when: send_email
@@ -66,190 +38,47 @@
           notmuch show --format=json --sort=newest-first --body=false \
                   tag:sent subject:{{ email_subject }} \
                   | jq .'[0][][0].id' | xargs echo | tee {{ email_chain }}
-  
-  
+
   - name: Signal processing
-    when: param == "process"
+    when: signal == "process"
     block:
     - name: Set state to processing
-      shell:
-        cmd: |
-          bash {{ script_email }} novogene_set_state {{ batchid }} processing
-    
-    - name: Send Email Processing
-      when: send_email
-      tags: email
-      vars:
-        last_email_sent: "{{ lookup('file', email_chain) }}"
-      shell:
-        chdir: '{{ email_folder }}'
-        cmd: |
-          gmi send {{ send_to_email }} << EOF
-          To: {{ send_to_email }}
-          References: <{{ last_email_sent }}>
-          In-Reply-To: <{{ last_email_sent }}>
-          Subject: {{ email_subject }}
-          Content-Type: text/html; charset="UTF-8"
-          -----------------
-    
-          <html><body><pre>
-          status: <b>{{ batchid }}</b> is being <i>processed</i>.
-          </pre></body></html>
-    
-          EOF
-
-    - name: Send Notification Processing
-      when: send_notification
-      include_tasks: playbooks/bits/notify.yaml
-      vars:
-        state: 'Processing'
-
+      shell: bash {{ script_email }} novogene_set_state {{ batchid }} processing
+    - include_tasks: playbooks/bits/notify.yaml
+    - include_tasks: playbooks/bits/email.yaml
 
   - name: Signal download
-    when: param == "download"
+    when: signal == "download"
     block:
-    - name: Send Email Downloading
-      when: send_email
-      tags: email
-      vars:
-        last_email_sent: "{{ lookup('file', email_chain) }}"
-      shell:
-        chdir: '{{ email_folder }}'
-        cmd: |
-          gmi send {{ send_to_email }} << EOF
-          To: {{ send_to_email }}
-          References: <{{ last_email_sent }}>
-          In-Reply-To: <{{ last_email_sent }}>
-          Subject: {{ email_subject }}
-          Content-Type: text/html; charset="UTF-8"
-          -----------------
-  
-          <html><body><pre>
-          status: <b>{{ batchid }}</b> is being <i>downloaded</i>.
-          </pre></body></html>
-  
-          EOF
+    - include_tasks: playbooks/bits/notify.yaml
+    - include_tasks: playbooks/bits/email.yaml
 
-    - name: Send Notification Downloading
-      when: send_notification
-      include_tasks: playbooks/bits/notify.yaml
-      vars:
-        state: 'Downloading'
-
+  - name: Signal checking
+    when: signal == "check"
+    block:
+    - include_tasks: playbooks/bits/notify.yaml
+    - include_tasks: playbooks/bits/email.yaml
 
   - name: Signal galaxy
-    when: param == "galaxy"
+    when: signal == "galaxy"
     block:
-    - name: Send Email Galaxy
-      when: send_email
-      tags: email
-      vars:
-        last_email_sent: "{{ lookup('file', email_chain) }}"
-      shell:
-        chdir: '{{ email_folder }}'
-        cmd: |
-          gmi send {{ send_to_email }} << EOF
-          To: {{ send_to_email }}
-          References: <{{ last_email_sent }}>
-          In-Reply-To: <{{ last_email_sent }}>
-          Subject: {{ email_subject }}
-          Content-Type: text/html; charset="UTF-8"
-          -----------------
-  
-          <html><body><pre>
-          status: <b>{{ batchid }}</b> is being <i>uploaded to Galaxy</i>.
-          </pre></body></html>
-  
-          EOF
-
-    - name: Send Notification Galaxy
-      when: send_notification
-      include_tasks: playbooks/bits/notify.yaml
-      vars:
-        state: 'Galaxy Upload'
+    - include_tasks: playbooks/bits/notify.yaml
+    - include_tasks: playbooks/bits/email.yaml
 
   - name: Signal archiving
-    when: param == "archive"
+    when: signal == "archive"
     block:
-    - name: Send Email Archiving
-      when: send_email
-      tags: email
-      vars:
-        last_email_sent: "{{ lookup('file', email_chain) }}"
-      shell:
-        chdir: '{{ email_folder }}'
-        cmd: |
-          gmi send {{ send_to_email }} << EOF
-          To: {{ send_to_email }}
-          References: <{{ last_email_sent }}>
-          In-Reply-To: <{{ last_email_sent }}>
-          Subject: {{ email_subject }}
-          Content-Type: text/html; charset="UTF-8"
-          -----------------
-  
-          <html><body><pre>
-          status: <b>{{ batchid }}</b> is being <i>archived</i> to disk.
-          </pre></body></html>
-  
-          EOF
+    - include_tasks: playbooks/bits/notify.yaml
+    - include_tasks: playbooks/bits/email.yaml
 
-    - name: Send Notification Archiving
-      when: send_notification
-      include_tasks: playbooks/bits/notify.yaml
-      vars:
-        state: 'Archiving'
-  
   - name: Signal final
-    when: param == "finish"
+    when: signal == "finish"
     block:
     - name: Set state to finished
-      shell:
-        cmd: |
-          bash {{ script_email }} novogene_set_state {{ batchid }} finished
-  
+      shell: bash {{ script_email }} novogene_set_state {{ batchid }} finished
+
     - name: Send Email final
-      when: send_email
-      tags: email
-      vars:
-        last_email_sent: "{{ lookup('file', email_chain) }}"
-      shell:
-        chdir: '{{ email_folder }}'
-        cmd: |
-          gmi send {{ send_to_email }} << EOF
-          References: <{{ last_email_sent }}>
-          In-Reply-To: <{{ last_email_sent }}>
-          To: {{ send_to_email }}
-          Subject: Re: {{ email_subject }}
-          Content-Type: text/html; charset="UTF-8"
-          -----------------
-  
-          <html><body><pre>
-          Novogene batch <b>{{ batchid }}</b> is <i>finished.</i>
-          <small>(downloaded, checked, uploaded to Galaxy, and locally archived).</small>\
-          <hr/>\
-          <i>Sample IDs</i>     : {{ sample_ids_inline.msg }}
-          <i>Archived To</i>    : {{ novogene_mount }}/{{ novogene_subdir }}/{{ batchid }}
-          <i>Galaxy History</i> : {{ batchid }}
-          <i>Samplesheet</i>    : {{ remote_tsv | basename }} (updated)
-          <hr/>
-          Please note:
-  
-             The Galaxy history <b>{{ batchid }}</b>
-             should <u>not</u> be used for processing.
-  
-             Please <u>copy the data into another history</u>
-             and process it there.
-  
-          Happy analyzing!
-          </pre></body></html>
-  
-          EOF
-            
-    - name: Send Notification Finished
-      when: send_notification
-      include_tasks: playbooks/bits/notify.yaml
-      vars:
-        state: 'Finished'  ## state not needed here
-        prefix: ""         ## No date for final
-  
-  
+      vars: {prefix: ""}
+      block:
+      - include_tasks: playbooks/bits/notify.yaml
+      - include_tasks: playbooks/bits/email.yaml

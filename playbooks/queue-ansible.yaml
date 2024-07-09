@@ -2,7 +2,7 @@
   block:
   - name: Send queued email
     include_tasks: playbooks/send-signals.yaml
-    vars: {param: queue}
+    vars: {signal: queue}
     
   - name: Check value of current ansible lockfile
     shell: |
@@ -29,4 +29,4 @@
 
   - name: Send processing email
     include_tasks: playbooks/send-signals.yaml
-    vars: {param: process}
+    vars: {signal: process}

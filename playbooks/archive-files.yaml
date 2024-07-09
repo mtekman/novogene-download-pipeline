@@ -5,7 +5,7 @@
 
   - name: Send archiving signal
     include_tasks: playbooks/send-signals.yaml
-    vars: {param: archive}
+    vars: {signal: archive}
 
   - name: Move Unpacked Files to Archive
     synchronize:
