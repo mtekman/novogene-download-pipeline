@@ -15,5 +15,9 @@
       bash {{ script_phosh }} notify send "{{ notify_subject }}" "{{ message }}" > {{ notif_id }}
       {% else %}
       echo '{{ message }}' >> '{{ notif_msg }}';
+         {% if replace_notif %}
       bash {{ script_phosh }} notify update {{ last_id }} "{{ notify_subject }}" "{{ message }}" "{{ last_message }}"
+         {% else %}
+      bash {{ script_phosh }} notify send "{{ notify_subject }}" "{{ message }}" "{{ last_message }}" >> {{ notif_id }}
+         {% endif %}
       {% endif %}

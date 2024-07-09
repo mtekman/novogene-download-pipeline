@@ -2,6 +2,7 @@
   vars:
     email_subject: "Novogene Batch: {{ batchid }}"
     notify_subject: "{{ batchid }}"
+    replace_notif: false   ## if false, then notifications are appended
     email_chain : '{{ working_dir }}/email.chain'
     notif_id: '{{ working_dir }}/notify.id'
     notif_msg: '{{ working_dir }}/notify.msg'
@@ -16,19 +17,18 @@
       when: send_notification
       tags: notify
       block:
-      - name: Get last not ID
+      - name: Check if notification file exists
         stat: {path: '{{ notif_id }}'}
         register: notif_file
 
-      - name: Kill last notification
-        vars:
-          notid: "{{ lookup('file', notif_id)}}"
-        shell:
-          cmd: bash {{ script_phosh }} notify kill {{ notid }}
-        when: notif_file.stat.exists
-    - include_tasks: playbooks/bits/notify.yaml
-    - include_tasks: playbooks/bits/email.yaml
-
+    - name: Kill last notification(s)
+      vars:
+        notif_ids: "{{ lookup('file', notif_id).split('\n') }}"
+      shell: 
+        cmd: "bash {{ script_phosh }} notify kill {{ item }}"
+      with_items: "{{ notif_ids }}"
+      when: notif_file.stat.exists
+        
     - name: Get ID of last email and set it for future chains
       when: send_email
       tags: email
