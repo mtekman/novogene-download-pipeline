@@ -7,7 +7,7 @@ Date: Mon, 18 Mar 2024 16:45:12 +0800 (CST)
 From: css@novogene-europe.com
 To: donothing@nothing.com
 Cc: donothing@nothing.com
-Message-ID: <-593807445.21841.1710751512447@CSS-prod-UK-app3>
+Message-ID: <{{ email_messageid }}>
 Subject: Novogene Data release - {{ batchid }}
 Content-Type: multipart/mixed; 
 	boundary="----=_Part_21839_904846384.1710751507829"

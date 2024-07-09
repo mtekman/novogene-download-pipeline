@@ -140,6 +140,7 @@
       block:
       - name: Generate the email message ID
         set_fact:
+          ## Message-ID: <-593807445.21841.1710751512447@CSS-prod-UK-app3>
           email_messageid: "{{ '-%09d' | format(range(100000000, 1000000000) | random | int) }}.{{ '%05d' | format(range(10000, 100000) | random | int) }}.{{ '%013d' | format(range(1000000000000, 10000000000000) | random | int) }}@CSS-prod-uk-app3"
 
       - name: Print the messageID
