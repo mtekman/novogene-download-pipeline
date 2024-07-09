@@ -2,25 +2,18 @@
   block:
   - name: Generate or retrieve batch
     include_tasks: playbooks/generate-testdata.yaml
-    ## inherits: batchid, testdata_cache
- 
-  - name: Install test archive
+
+  - name: Install test files
     copy:
-      src : '{{ testdata_cache }}/{{ batchid }}.tar'
-      dest: '{{ working_dir }}/{{ batchid }}.tar'
-  - name: Install test MD5
-    copy:
-      src : '{{ testdata_cache }}/{{ batchid }}.MD5'
-      dest: '{{ working_dir }}/MD5.txt'
-  - name: Install test JSON
-    copy:
-      src : '{{ testdata_cache }}/{{ batchid }}.json'
-      dest: '{{ working_dir }}/batch.json'
-  - name: Install test email
-    copy:
-      src : '{{ testdata_cache }}/{{ batchid }}.email'
-      dest: '{{ working_dir }}/email.txt'
-      
+      src : '{{ testdata_cache }}/{{ batchid }}.{{ item.src }}'
+      dest: '{{ working_dir }}/{{ item.dest }}'
+    loop:
+     - { src: 'tar'  , dest: '{{ batchid }}.tar' }
+     - { src: 'MD5'  , dest: 'MD5.txt'    }
+     - { src: 'json' , dest: 'batch.json' }
+     - { src: 'email', dest: 'email.txt'  }
+
+
   - name: Install fake email to notmuch
     shell:
       chdir: '{{ working_dir }}'

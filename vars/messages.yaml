@@ -1,6 +1,15 @@
+## Email States
+emaildict:
+  queue: queued
+  process: processing
+  finish: finished
+
+## Notification States
 sigdict:  ## "Batch is":
   queue : waiting in queue
+  generate: creating test data
   process : now processing
+  manifest: fetching manifest
   download : downloading archives
   checkarchive : testing archives
   unpack: unpacking archives

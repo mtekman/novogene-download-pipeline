@@ -18,6 +18,9 @@
     final_prefix: '{{ testdata_cache }}/{{ batchid }}'
   become: no
   block:
+  - include_tasks: playbooks/send-signals.yaml
+    vars: {signal: generate}
+
   - name: Ensure working directory exists
     file:
        path: '{{ gendata_dir }}'

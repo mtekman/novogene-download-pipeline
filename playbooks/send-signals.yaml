@@ -7,27 +7,27 @@
     notif_id: '{{ working_dir }}/notify.id'
     notif_msg: '{{ working_dir }}/notify.msg'
   block:
-  - name: Signal queued
+  - name: Set State
+    when: signal in emaildict
+    shell: bash {{ script_email }} novogene_set_state {{ batchid }} {{ emaildict[signal] }}
+
+  - name: Initialise Signals
     when: signal == "queue"
     block:
-    - name: Set state to queued
-      shell: bash {{ script_email }} novogene_set_state {{ batchid }} queued
-
     - name: Clear any old notifications for batch
       when: send_notification
       tags: notify
       block:
       - name: Check if notification file exists
-        stat: {path: '{{ notif_id }}'}
-        register: notif_file
+        stat: '{{ notif_id }}'
+        register: notiffile
 
-    - name: Kill last notification(s)
-      vars:
-        notif_ids: "{{ lookup('file', notif_id).split('\n') }}"
-      shell: 
-        cmd: "bash {{ script_phosh }} notify kill {{ item }}"
-      with_items: "{{ notif_ids }}"
-      when: notif_file.stat.exists
+      - name: Kill last notification
+        when: notiffile.stat.exists
+        vars:
+          notifids: "{{ lookup('file', notif_id).split('\n') }}"
+        shell: "bash {{ script_phosh }} notify kill {{ item }}"
+        with_items: "{{ notifids }}"
         
     - name: Get ID of last email and set it for future chains
       when: send_email
@@ -38,18 +38,6 @@
           notmuch show --format=json --sort=newest-first --body=false \
                   tag:sent subject:{{ email_subject }} \
                   | jq .'[0][][0].id' | xargs echo | tee {{ email_chain }}
-
-  - name: Signal processing
-    when: signal == "process"
-    block:
-    - name: Set state to processing
-      shell: bash {{ script_email }} novogene_set_state {{ batchid }} processing
-
-  - name: Signal final
-    when: signal == "finish"
-    block:
-    - name: Set state to finished
-      shell: bash {{ script_email }} novogene_set_state {{ batchid }} finished
 
   - name: General Signalling Tasks
     when: signal in sigdict

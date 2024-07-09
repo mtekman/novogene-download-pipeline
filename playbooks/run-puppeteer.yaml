@@ -2,6 +2,9 @@
   ## Logs in to the novogene website because they have no working FTP
   ## and downloads the JSON manifest containing batch info and data links
   block:  
+  - include_tasks: playbooks/send-signals.yaml
+    vars: {signal: manifest}
+    
   - name: Link puppeteer to download area
     become: no
     command:

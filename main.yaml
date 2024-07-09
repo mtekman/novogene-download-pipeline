@@ -2,6 +2,7 @@
   hosts: localhost
   vars:
     ## Populated from inventory: batchid, send_to_email, test_mode, 
+    ##test_mode: false
     test_mode: true
     send_email: true
     send_notification: true
@@ -57,3 +58,7 @@
     file:
       path: '{{ ansible_lock_file }}'
       state: absent
+
+  - name: Remove test batch data
+    when: test_mode
+    include_tasks: playbooks/test-batch.yaml
