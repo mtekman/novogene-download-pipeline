@@ -1,0 +1,20 @@
+- name: Send Notification
+  when: send_notification
+  tags: notify
+  vars:
+    state: 'TEST'
+    prefix: '({{ ansible_date_time.time }}) '
+    is_first: false
+    message: '{{ prefix }}{{ state }}'
+    ## Dynamic
+    last_id: "{{ lookup('file', notif_id) if not is_first else '' }}"
+    last_message: "{{ lookup('file', notif_msg) if not is_first else '' }}"
+  shell:
+    cmd: |
+      {% if is_first %}
+      echo '{{ message }}' > '{{ notif_msg }}';
+      bash {{ script_phosh }} notify send "{{ notify_subject }}" "{{ message }}" > {{ notif_id }}
+      {% else %}
+      echo '{{ message }}' >> '{{ notif_msg }}';
+      bash {{ script_phosh }} notify update {{ last_id }} "{{ notify_subject }}" "{{ message }}" "{{ last_message }}"
+      {% endif %}

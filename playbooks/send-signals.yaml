@@ -52,15 +52,10 @@
         
     - name: Send Notification Queued
       when: send_notification
-      tags: notify
+      include_tasks: playbooks/bits/notify.yaml
       vars:
         state: 'Queued'
-        message: '({{ ansible_date_time.time }}) {{ state }}'
-      shell:
-        cmd: |
-          echo '{{ message }}' > '{{ notif_msg }}';
-          bash {{ script_phosh }} notify send "{{ notify_subject }}" "{{ message }}" | tee {{ notif_id }}
-
+        is_first: true
 
     - name: Get ID of last email and set it for future chains
       when: send_email
@@ -103,23 +98,11 @@
     
           EOF
 
-    # - name: Debug processing
-    #   when: send_notification
-    #   debug:
-    #     msg: "RED: {{ lookup('file', notif_msg) }}"
-
     - name: Send Notification Processing
       when: send_notification
-      tags: notify
+      include_tasks: playbooks/bits/notify.yaml
       vars:
         state: 'Processing'
-        message: '({{ ansible_date_time.time }}) {{ state }}'
-        last_id: "{{ lookup('file', notif_id) }}"
-        last_message: "{{ lookup('file', notif_msg) }}"
-      shell:
-        cmd: |
-          echo '{{ message }}' >> '{{ notif_msg }}';
-          bash {{ script_phosh }} notify update {{ last_id }} "{{ notify_subject }}" "{{ message }}" "{{ last_message }}"
 
 
   - name: Signal download
@@ -149,16 +132,9 @@
 
     - name: Send Notification Downloading
       when: send_notification
-      tags: notify
+      include_tasks: playbooks/bits/notify.yaml
       vars:
         state: 'Downloading'
-        message: '({{ ansible_date_time.time }}) {{ state }}'
-        last_id: "{{ lookup('file', notif_id) }}"
-        last_message: "{{ lookup('file', notif_msg) }}"
-      shell:
-        cmd: |
-          echo '{{ message }}' >> '{{ notif_msg }}';
-          bash {{ script_phosh }} notify update {{ last_id }} "{{ notify_subject }}" "{{ message }}" "{{ last_message }}"
 
 
   - name: Signal galaxy
@@ -188,17 +164,9 @@
 
     - name: Send Notification Galaxy
       when: send_notification
-      tags: notify
+      include_tasks: playbooks/bits/notify.yaml
       vars:
         state: 'Galaxy Upload'
-        message: '({{ ansible_date_time.time }}) {{ state }}'
-        last_id: "{{ lookup('file', notif_id) }}"
-        last_message: "{{ lookup('file', notif_msg) }}"
-      shell:
-        cmd: |
-          echo '{{ message }}' >> '{{ notif_msg }}';
-          bash {{ script_phosh }} notify update {{ last_id }} "{{ notify_subject }}" "{{ message }}" "{{ last_message }}"
-
 
   - name: Signal archiving
     when: param == "archive"
@@ -227,17 +195,9 @@
 
     - name: Send Notification Archiving
       when: send_notification
-      tags: notify
+      include_tasks: playbooks/bits/notify.yaml
       vars:
         state: 'Archiving'
-        message: '({{ ansible_date_time.time }}) {{ state }}'
-        last_id: "{{ lookup('file', notif_id) }}"
-        last_message: "{{ lookup('file', notif_msg) }}"
-      shell:
-        cmd: |
-          echo '{{ message }}' >> '{{ notif_msg }}';
-          bash {{ script_phosh }} notify update {{ last_id }} "{{ notify_subject }}" "{{ message }}" "{{ last_message }}"
-
   
   - name: Signal final
     when: param == "finish"
@@ -287,15 +247,9 @@
             
     - name: Send Notification Finished
       when: send_notification
-      tags: notify
+      include_tasks: playbooks/bits/notify.yaml
       vars:
-        state: 'Finished'
-        message: '({{ ansible_date_time.time }}) {{ state }}'
-        last_id: "{{ lookup('file', notif_id) }}"
-        last_message: "{{ lookup('file', notif_msg) }}"
-      shell:
-        cmd: |
-          echo '{{ message }}' >> '{{ notif_msg }}';
-          bash {{ script_phosh }} notify update {{ last_id }} "{{ notify_subject }}" "{{ message }}" "{{ last_message }}"
+        state: 'Finished'  ## state not needed here
+        prefix: ""         ## No date for final
   
   
