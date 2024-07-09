@@ -1,8 +1,10 @@
 - name: All processing signals
   vars:
     email_subject: "Novogene Batch: {{ batchid }}"
+    notify_subject: "{{ batchid }} ({{ ansible_date_time.date }})"
     email_chain : '{{ working_dir }}/email.chain'
-    notif_chain:  '{{ working_dir }}/notify.chain'
+    notif_id: '{{ working_dir }}/notify.id'
+    notif_msg: '{{ working_dir }}/notify.msg'
   block:
   - name: Signal queued
     when: param == "queue"
@@ -14,6 +16,7 @@
     
     - name: Send Email Queued
       when: send_email
+      tags: email
       shell:
         chdir: '{{ email_folder }}'
         cmd: |
@@ -33,14 +36,35 @@
     
           EOF
 
+    - name: Clear any old notifications for batch
+      when: send_notification
+      tags: notify
+      block:
+      - name: Get last not ID
+        stat: {path: '{{ notif_id }}'}
+        register: notif_file
+      - name: Kill last notification
+        vars:
+          notid: "{{ lookup('file', notif_id)}}"
+        shell:
+          cmd: bash {{ script_phosh }} notify kill {{ notid }}
+        when: notif_file.stat.exists
+        
     - name: Send Notification Queued
       when: send_notification
+      tags: notify
+      vars:
+        state: 'Queued'
+        message: '({{ ansible_date_time.time }}) {{ state }}'
       shell:
         cmd: |
-          bash {{ script_phosh }} notify send "{{ email_subject }}" "Queued" | tee {{ notif_chain }}
+          echo '{{ message }}' > '{{ notif_msg }}';
+          bash {{ script_phosh }} notify send "{{ notify_subject }}" "{{ message }}" | tee {{ notif_id }}
+
 
     - name: Get ID of last email and set it for future chains
       when: send_email
+      tags: email
       shell:
         chdir: '{{ email_folder }}'
         cmd: |
@@ -59,6 +83,7 @@
     
     - name: Send Email Processing
       when: send_email
+      tags: email
       vars:
         last_email_sent: "{{ lookup('file', email_chain) }}"
       shell:
@@ -78,11 +103,23 @@
     
           EOF
 
+    # - name: Debug processing
+    #   when: send_notification
+    #   debug:
+    #     msg: "RED: {{ lookup('file', notif_msg) }}"
+
     - name: Send Notification Processing
       when: send_notification
+      tags: notify
+      vars:
+        state: 'Processing'
+        message: '({{ ansible_date_time.time }}) {{ state }}'
+        last_id: "{{ lookup('file', notif_id) }}"
+        last_message: "{{ lookup('file', notif_msg) }}"
       shell:
         cmd: |
-          bash {{ script_phosh }} notify send "{{ email_subject }}" "Processing" | tee -a {{ notif_chain }}
+          echo '{{ message }}' >> '{{ notif_msg }}';
+          bash {{ script_phosh }} notify update {{ last_id }} "{{ notify_subject }}" "{{ message }}" "{{ last_message }}"
 
 
   - name: Signal download
@@ -90,6 +127,7 @@
     block:
     - name: Send Email Downloading
       when: send_email
+      tags: email
       vars:
         last_email_sent: "{{ lookup('file', email_chain) }}"
       shell:
@@ -111,15 +149,24 @@
 
     - name: Send Notification Downloading
       when: send_notification
+      tags: notify
+      vars:
+        state: 'Downloading'
+        message: '({{ ansible_date_time.time }}) {{ state }}'
+        last_id: "{{ lookup('file', notif_id) }}"
+        last_message: "{{ lookup('file', notif_msg) }}"
       shell:
         cmd: |
-          bash {{ script_phosh }} notify send "{{ email_subject }}" "Downloading" | tee -a {{ notif_chain }}
+          echo '{{ message }}' >> '{{ notif_msg }}';
+          bash {{ script_phosh }} notify update {{ last_id }} "{{ notify_subject }}" "{{ message }}" "{{ last_message }}"
 
 
   - name: Signal galaxy
     when: param == "galaxy"
     block:
     - name: Send Email Galaxy
+      when: send_email
+      tags: email
       vars:
         last_email_sent: "{{ lookup('file', email_chain) }}"
       shell:
@@ -141,15 +188,24 @@
 
     - name: Send Notification Galaxy
       when: send_notification
+      tags: notify
+      vars:
+        state: 'Galaxy Upload'
+        message: '({{ ansible_date_time.time }}) {{ state }}'
+        last_id: "{{ lookup('file', notif_id) }}"
+        last_message: "{{ lookup('file', notif_msg) }}"
       shell:
         cmd: |
-          bash {{ script_phosh }} notify send "{{ email_subject }}" "Galaxy" | tee -a {{ notif_chain }}
+          echo '{{ message }}' >> '{{ notif_msg }}';
+          bash {{ script_phosh }} notify update {{ last_id }} "{{ notify_subject }}" "{{ message }}" "{{ last_message }}"
 
 
   - name: Signal archiving
     when: param == "archive"
     block:
     - name: Send Email Archiving
+      when: send_email
+      tags: email
       vars:
         last_email_sent: "{{ lookup('file', email_chain) }}"
       shell:
@@ -171,9 +227,16 @@
 
     - name: Send Notification Archiving
       when: send_notification
+      tags: notify
+      vars:
+        state: 'Archiving'
+        message: '({{ ansible_date_time.time }}) {{ state }}'
+        last_id: "{{ lookup('file', notif_id) }}"
+        last_message: "{{ lookup('file', notif_msg) }}"
       shell:
         cmd: |
-          bash {{ script_phosh }} notify send "{{ email_subject }}" "Archiving" | tee -a {{ notif_chain }}
+          echo '{{ message }}' >> '{{ notif_msg }}';
+          bash {{ script_phosh }} notify update {{ last_id }} "{{ notify_subject }}" "{{ message }}" "{{ last_message }}"
 
   
   - name: Signal final
@@ -186,6 +249,7 @@
   
     - name: Send Email final
       when: send_email
+      tags: email
       vars:
         last_email_sent: "{{ lookup('file', email_chain) }}"
       shell:
@@ -223,8 +287,15 @@
             
     - name: Send Notification Finished
       when: send_notification
+      tags: notify
+      vars:
+        state: 'Finished'
+        message: '({{ ansible_date_time.time }}) {{ state }}'
+        last_id: "{{ lookup('file', notif_id) }}"
+        last_message: "{{ lookup('file', notif_msg) }}"
       shell:
         cmd: |
-          bash {{ script_phosh }} notify send "{{ email_subject }}" "Finished" | tee -a {{ notif_chain }}
+          echo '{{ message }}' >> '{{ notif_msg }}';
+          bash {{ script_phosh }} notify update {{ last_id }} "{{ notify_subject }}" "{{ message }}" "{{ last_message }}"
   
   
