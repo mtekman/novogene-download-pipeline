@@ -2,7 +2,6 @@
   when: send_notification
   tags: notify
   vars:
-    signal: "queue"
     prefix: "{{ lookup('pipe', 'date \"+%H:%M:%S\"') }} | "
     ## Dynamic
     message: '{{ prefix }}{{ sigdict[signal] }}'

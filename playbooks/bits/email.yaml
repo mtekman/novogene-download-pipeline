@@ -57,4 +57,4 @@
   - name: Set the email chain
     when: signal == "queue"
     shell:
-      cmd: notmuch show --sort=newest-first --format=json tag:sent subject:{{ email_subject }} | head -1 | jq '.[0][0][0].id' | xargs echo >> {{ email_chain }}
+      cmd: notmuch show --sort=newest-first --format=json tag:sent subject:{{ email_subject }} | head -1 | jq '.[0][0][0].id' | xargs echo > {{ email_chain }}
