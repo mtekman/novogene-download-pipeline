@@ -6,40 +6,39 @@
     email_chain : '{{ working_dir }}/email.chain'
     notif_id: '{{ working_dir }}/notify.id'
     notif_msg: '{{ working_dir }}/notify.msg'
+    signal: queue
   block:
-  - name: Set State
+  - name: Initialise signalling framework
+    when: signal == "queue"
+    block:
+    - name: Touch needed files
+      when: signal == "queue"
+      file:
+        path: '{{ item }}'
+        state: touch
+      loop:
+      - '{{ notif_id }}'
+      - '{{ notif_msg }}'
+      - '{{ email_chain }}'
+  
+    - name: Check if notification file is empty
+      when: signal == "queue" and send_notification
+      stat:
+        path: '{{ notif_id }}'
+      register: notif_file
+  
+    - name: Kill last notifications
+      when: signal == "queue" and send_notification and notif_file.stat.size > 0
+      vars:
+        notifids: "{{ lookup('file', notif_id).split('\n') }}"
+      shell: "bash {{ script_phosh }} notify kill {{ item }}"
+      with_items: "{{ notifids }}"
+  
+  - name: Set Email states
     when: signal in emaildict
     shell: bash {{ script_email }} novogene_set_state {{ batchid }} {{ emaildict[signal] }}
 
-  - name: Initialise Signals
-    when: signal == "queue"
-    block:
-    - name: Clear any old notifications for batch
-      when: send_notification
-      tags: notify
-      block:
-      - name: Check if notification file exists
-        stat: '{{ notif_id }}'
-        register: notiffile
-
-      - name: Kill last notification
-        when: notiffile.stat.exists
-        vars:
-          notifids: "{{ lookup('file', notif_id).split('\n') }}"
-        shell: "bash {{ script_phosh }} notify kill {{ item }}"
-        with_items: "{{ notifids }}"
-        
-    - name: Get ID of last email and set it for future chains
-      when: send_email
-      tags: email
-      shell:
-        chdir: '{{ email_folder }}'
-        cmd: |
-          notmuch show --format=json --sort=newest-first --body=false \
-                  tag:sent subject:{{ email_subject }} \
-                  | jq .'[0][][0].id' | xargs echo | tee {{ email_chain }}
-
-  - name: General Signalling Tasks
+  - name: Set Signalling states
     when: signal in sigdict
     block:
     - include_tasks: playbooks/bits/notify.yaml

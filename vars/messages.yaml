@@ -16,5 +16,5 @@ sigdict:  ## "Batch is":
   checkfastq : testing unpacked FASTQ
   galaxy : uploading to UseGalaxy
   archive : backing up to local disk
-  logged : being logged in samplesheet
+  logged : logging to samplesheet
   finish : finished

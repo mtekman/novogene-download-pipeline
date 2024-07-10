@@ -2,51 +2,60 @@
   when: send_email
   tags: email
   vars:
-    signal: "queue"
-    last_email_sent: "{{ lookup('file', email_chain) if signal != 'queue' else '' }}"
-  shell:
-    chdir: '{{ email_folder }}'
-    cmd: |
-      gmi send {{ send_to_email }} << EOF
-      To: {{ send_to_email }}
-      {% if signal != "queue" %}
-      References: <{{ last_email_sent }}>
-      In-Reply-To: <{{ last_email_sent }}>
-      {% endif %}
-      Subject: {{ email_subject }}
-      Content-Type: text/html; charset="UTF-8"
-      -----------------
+    signal: queue ## first signal
+    last_email_sent: "{{ lookup('file', email_chain) if signal!='queue' else '' }}"
+  block:
+  - name: Send the email
+    shell:
+      chdir: '{{ email_folder }}'
+      cmd: |
+        gmi send {{ send_to_email }} << EOF
+        To: {{ send_to_email }}
+        {% if signal != "queue" %}
+        In-Reply-To: <{{ last_email_sent }}>
+        References: <{{ last_email_sent }}>
+        {% endif %}
+        Subject: {{ email_subject }}
+        Content-Type: text/html; charset="UTF-8"
+        -----------------
+  
+        <html><body><pre>\
+  
+        {% if signal == "queue" %}
+        <i>(Bleep, bloop.)</i>
+        This is an automatic email to let you know that the
+        Novogene Sequence Retrieval Pipeline is running!
+  
+        status: <b>{{ batchid }}</b> is <i>{{ sigdict[signal] }}</i>.
+        \
+        {% elif signal == "finish" %}
+        Novogene Batch <b>{{ batchid }}</b> has <i>finished.</i>
+        <small>(downloaded, checked, uploaded to Galaxy, and locally archived).</small>\
+        <hr/>\
+        <i>Sample IDs</i>     : {{ sample_ids_inline.msg }}
+        <i>Archived To</i>    : {{ novogene_mount }}/{{ novogene_subdir }}/{{ batchid }}
+        <i>Galaxy History</i> : {{ batchid }}
+        <i>Samplesheet</i>    : {{ remote_tsv | basename }} (updated)
+        <hr/>
+        Please note:
+  
+           The Galaxy history <b>{{ batchid }}</b>
+           should <u>not</u> be used for processing.
+  
+           Please <u>copy the data into another history</u>
+           and process it there.
+  
+        Happy analyzing!
+        \
+        {% else %}
+        status: <b>{{ batchid }}</b> is <i>{{ sigdict[signal] }}</i>.
+        \
+        {% endif %}
+        </pre></body></html>
+  
+        EOF
 
-      <html><body><pre>\
-      
-      {% if signal == "queue" %}
-      <i>(Bleep, bloop.)</i>
-      This is an automatic email to let you know that the
-      Novogene Sequence Retrieval Pipeline is running!
-      \
-      {% elif signal == "finish" %}
-      Novogene Batch <b>{{ batchid }}</b> has <i>finished.</i>
-      <small>(downloaded, checked, uploaded to Galaxy, and locally archived).</small>\
-      <hr/>\
-      <i>Sample IDs</i>     : {{ sample_ids_inline.msg }}
-      <i>Archived To</i>    : {{ novogene_mount }}/{{ novogene_subdir }}/{{ batchid }}
-      <i>Galaxy History</i> : {{ batchid }}
-      <i>Samplesheet</i>    : {{ remote_tsv | basename }} (updated)
-      <hr/>
-      Please note:
-  
-         The Galaxy history <b>{{ batchid }}</b>
-         should <u>not</u> be used for processing.
-  
-         Please <u>copy the data into another history</u>
-         and process it there.
-  
-      Happy analyzing!
-      \
-      {% else %}
-      status: <b>{{ batchid }}</b> is <i>{{ sigdict[signal] }}</i>.
-      \
-      {% endif %}
-      </pre></body></html>
-
-      EOF
+  - name: Set the email chain
+    when: signal == "queue"
+    shell:
+      cmd: notmuch show --sort=newest-first --format=json tag:sent subject:{{ email_subject }} | head -1 | jq '.[0][0][0].id' | xargs echo | tee {{ email_chain }}

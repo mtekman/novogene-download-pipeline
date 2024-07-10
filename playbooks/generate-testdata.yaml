@@ -50,7 +50,6 @@
         cmd: |
           rm {{ final_prefix }}.{tar,MD5,json,email};
           rm -rf {{ gendata_dir }};
-        
 
   - name: Generate sample array
     set_fact:
