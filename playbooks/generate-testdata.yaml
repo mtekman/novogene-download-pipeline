@@ -19,7 +19,7 @@
   become: no
   block:
   - include_tasks: playbooks/send-signals.yaml
-    vars: {signal: generate}
+    vars: {signal: generate, first_signal: true}
 
   - name: Ensure working directory exists
     file:

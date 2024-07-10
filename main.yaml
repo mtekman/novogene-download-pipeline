@@ -28,12 +28,12 @@
   - name: Initialise tasks
     include_tasks: playbooks/initialise-signals.yaml
     
-  - name: Queue ansible job   ## Queue must always be the first signal
-    include_tasks: playbooks/queue-ansible.yaml
-
   - name: Setup test batch data
     when: test_mode
     include_tasks: playbooks/test-batch.yaml
+
+  - name: Queue ansible job
+    include_tasks: playbooks/queue-ansible.yaml
 
   - name: Get JSON manifest
     when: not test_mode

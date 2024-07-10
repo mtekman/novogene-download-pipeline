@@ -2,7 +2,8 @@
   when: send_email
   tags: email
   vars:
-    last_email_sent: "{{ lookup('file', email_chain) if signal!='queue' else '' }}"
+    last_email_sent: "{{ lookup('file', email_chain) if not first_signal else '' }}"
+    first_signal: false  ## default
   block:
   - name: Send the email
     shell:
@@ -10,7 +11,7 @@
       cmd: |
         gmi send {{ send_to_email }} << EOF
         To: {{ send_to_email }}
-        {% if signal != "queue" %}
+        {% if not first_signal %}
         In-Reply-To: <{{ last_email_sent }}>
         References: <{{ last_email_sent }}>
         {% endif %}
@@ -20,7 +21,7 @@
   
         <html><body><pre>\
   
-        {% if signal == "queue" %}
+        {% if first_signal %}
         <i>(Bleep, bloop.)</i>
         This is an automatic email to let you know that the
         Novogene Sequence Retrieval Pipeline is running!
@@ -55,6 +56,6 @@
         EOF
 
   - name: Set the email chain
-    when: signal == "queue"
+    when: first_signal
     shell:
       cmd: notmuch show --sort=newest-first --format=json tag:sent subject:{{ email_subject }} | head -1 | jq '.[0][0][0].id' | xargs echo > {{ email_chain }}

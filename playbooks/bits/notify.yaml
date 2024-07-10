@@ -5,11 +5,12 @@
     prefix: "{{ lookup('pipe', 'date \"+%H:%M:%S\"') }} | "
     ## Dynamic
     message: '{{ prefix }}{{ sigdict[signal] }}'
-    last_id: "{{ lookup('file', notif_id) if signal != 'queue' else '' }}"
-    last_message: "{{ lookup('file', notif_msg) if signal != 'queue' else '' }}"
+    last_id: "{{ lookup('file', notif_id) if not first_signal else '' }}"
+    last_message: "{{ lookup('file', notif_msg) if not first_signal else '' }}"
+    first_signal: false ## default
   shell:
     cmd: |
-      {% if signal == "queue" %}
+      {% if first_signal %}
       echo '{{ message }}' > '{{ notif_msg }}';
       bash {{ script_phosh }} notify send "{{ notify_subject }}" "{{ message }}" > {{ notif_id }}
       {% else %}
