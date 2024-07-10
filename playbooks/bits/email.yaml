@@ -2,7 +2,6 @@
   when: send_email
   tags: email
   vars:
-    signal: queue ## first signal
     last_email_sent: "{{ lookup('file', email_chain) if signal!='queue' else '' }}"
   block:
   - name: Send the email
@@ -58,4 +57,4 @@
   - name: Set the email chain
     when: signal == "queue"
     shell:
-      cmd: notmuch show --sort=newest-first --format=json tag:sent subject:{{ email_subject }} | head -1 | jq '.[0][0][0].id' | xargs echo | tee {{ email_chain }}
+      cmd: notmuch show --sort=newest-first --format=json tag:sent subject:{{ email_subject }} | head -1 | jq '.[0][0][0].id' | xargs echo >> {{ email_chain }}

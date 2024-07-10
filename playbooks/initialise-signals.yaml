@@ -1,0 +1,21 @@
+- name: Touch needed files
+  file:
+    path: '{{ item }}'
+    state: touch
+  loop:
+  - '{{ notif_id }}'
+  - '{{ notif_msg }}'
+  - '{{ email_chain }}'
+
+- name: Check if notification file is empty
+  when: send_notification
+  stat:
+    path: '{{ notif_id }}'
+  register: notif_file
+
+- name: Kill last notifications
+  when: send_notification and notif_file.stat.size > 0
+  vars:
+    notifids: "{{ lookup('file', notif_id).split('\n') }}"
+  shell: "bash {{ script_phosh }} notify kill {{ item }}"
+  with_items: "{{ notifids }}"

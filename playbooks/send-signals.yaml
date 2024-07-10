@@ -1,45 +1,9 @@
-- name: All processing signals
-  vars:
-    email_subject: "Novogene Batch: {{ batchid }}"
-    notify_subject: "{{ batchid }}"
-    replace_notif: false   ## if false, then notifications are appended
-    email_chain : '{{ working_dir }}/email.chain'
-    notif_id: '{{ working_dir }}/notify.id'
-    notif_msg: '{{ working_dir }}/notify.msg'
-    signal: queue
-  block:
-  - name: Initialise signalling framework
-    when: signal == "queue"
-    block:
-    - name: Touch needed files
-      when: signal == "queue"
-      file:
-        path: '{{ item }}'
-        state: touch
-      loop:
-      - '{{ notif_id }}'
-      - '{{ notif_msg }}'
-      - '{{ email_chain }}'
-  
-    - name: Check if notification file is empty
-      when: signal == "queue" and send_notification
-      stat:
-        path: '{{ notif_id }}'
-      register: notif_file
-  
-    - name: Kill last notifications
-      when: signal == "queue" and send_notification and notif_file.stat.size > 0
-      vars:
-        notifids: "{{ lookup('file', notif_id).split('\n') }}"
-      shell: "bash {{ script_phosh }} notify kill {{ item }}"
-      with_items: "{{ notifids }}"
-  
-  - name: Set Email states
-    when: signal in emaildict
-    shell: bash {{ script_email }} novogene_set_state {{ batchid }} {{ emaildict[signal] }}
+- name: Set Email states
+  when: signal in emaildict
+  shell: bash {{ script_email }} novogene_set_state {{ batchid }} {{ emaildict[signal] }}
 
-  - name: Set Signalling states
-    when: signal in sigdict
-    block:
-    - include_tasks: playbooks/bits/notify.yaml
-    - include_tasks: playbooks/bits/email.yaml
+- name: Set Signalling states
+  when: signal in sigdict
+  block:
+  - include_tasks: playbooks/bits/notify.yaml
+  - include_tasks: playbooks/bits/email.yaml

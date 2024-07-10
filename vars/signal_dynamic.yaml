@@ -1,0 +1,6 @@
+email_subject: "Novogene Batch: {{ batchid }}"
+notify_subject: "{{ batchid }}"
+replace_notif: false   ## if false, then notifications are appended
+email_chain : '{{ working_dir }}/email.chain'
+notif_id: '{{ working_dir }}/notify.id'
+notif_msg: '{{ working_dir }}/notify.msg'
