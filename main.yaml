@@ -25,12 +25,11 @@
        recurse: yes
 
   tasks:
-  ## Queue must always be the first signal
-  - name: Queue ansible job
-    include_tasks: playbooks/queue-ansible.yaml
-
   - name: Initialise tasks
     include_tasks: playbooks/initialise-signals.yaml
+    
+  - name: Queue ansible job   ## Queue must always be the first signal
+    include_tasks: playbooks/queue-ansible.yaml
 
   - name: Setup test batch data
     when: test_mode
