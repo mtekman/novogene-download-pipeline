@@ -5,19 +5,21 @@
     prefix: "{{ lookup('pipe', 'date \"+%H:%M:%S\"') }} | "
     ## Dynamic
     message: '{{ prefix }}{{ sigdict[signal] }}'
-    last_id: "{{ lookup('file', notif_id) if not first_signal else '' }}"
-    last_message: "{{ lookup('file', notif_msg) if not first_signal else '' }}"
+    all_notifs: "{{ lookup('file', notif_id) }}"
+    last_messages: "{{ lookup('file', notif_msg).split('\n') | reverse | join('\n') if not first_signal else '' }}"
     first_signal: false ## default
+    last_id: "{{ all_notifs.split('\n')[-1] if not first_signal else '' }}"
+    num_notifs: "{{ all_notifs.split('\n') | length | int }}"
   shell:
     cmd: |
       {% if first_signal %}
-      echo '{{ message }}' > '{{ notif_msg }}';
+      echo '{{ message }}' > '{{ notif_msg }}';  ## set message
       bash {{ script_phosh }} notify send "{{ notify_subject }}" "{{ message }}" > {{ notif_id }}
       {% else %}
-      echo '{{ message }}' >> '{{ notif_msg }}';
-         {% if replace_notif %}
-      bash {{ script_phosh }} notify update {{ last_id }} "{{ notify_subject }}" "{{ message }}" "{{ last_message }}"
-         {% else %}
-      bash {{ script_phosh }} notify send "{{ notify_subject }}" "{{ message }}" "{{ last_message }}" >> {{ notif_id }}
+      echo '{{ message }}' >> '{{ notif_msg }}'; ## prepend messages
+         {% if num_notifs|int >= notify_keepn %}  ## update last if over count
+      bash {{ script_phosh }} notify update {{ last_id }} "{{ notify_subject }}" "{{ message }}" "{{ last_messages }}"
+         {% else %}                          ## append to last is under count
+      bash {{ script_phosh }} notify send "{{ notify_subject }}" "{{ message }}" "{{ last_messages }}" >> {{ notif_id }}
          {% endif %}
       {% endif %}
