@@ -63,7 +63,7 @@
       environment:
           BATCH_NO : '{{ batchid }}'
           USEGALAXY_API_KEY : '{{ apigalaxy }}'
-          TAGS : 'datasets {{ tag_ids.stdout }}'
+          TAGS : 'datasets {{ tag_ids.stdout }}{{ " TEST" if test_mode else "" }}'
           SAMPLES : '{{ sample_ids.stdout }}'
           REMDIR : '{{ ftp_directory }}'
           VIRTUAL_ENV: '{{ bioblend_env }}'
