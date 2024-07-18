@@ -13,7 +13,7 @@
     file:
       path: '{{ ansible_lock_file }}'
       state: absent
-    when: last_task.stdout == batchid or last_task.stdout == ""
+    when: last_task.stdout | trim == batchid or last_task.stdout | trim == ""
 
   - name: Wait for other ansible invocations to complete
     wait_for:

@@ -7,7 +7,7 @@ emaildict:
 ## Notification States
 sigdict:  ## "Batch is":
   queue : waiting in queue
-  generate: creating test data
+  generate: preparing test data
   process : now processing
   manifest: fetching manifest
   download : downloading archives
