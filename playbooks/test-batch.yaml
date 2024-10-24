@@ -13,8 +13,22 @@
      - { src: 'json' , dest: 'batch.json' }
      - { src: 'email', dest: 'email.txt'  }
 
-
+    ## TODO: install only if not already present
   - name: Install fake email to notmuch
+    block:
+    - name: Check if email already exists
+      shell:
+         cmd: notmuch search subject:{{ batchid }} tag:new
+      register: email_exists
+
+    - name: Install email if not exists
+      shell:
+        chdir: '{{ working_dir }}'
+        cmd: cat email.txt | notmuch insert --folder mail -tags +unread
+      when: email_exists.stdout | trim != ""
+
+  - name: Set the email state
     shell:
       chdir: '{{ working_dir }}'
-      cmd: cat email.txt | notmuch insert --folder mail -tags +unread
+      cmd: notmuch tag +unread subject:{{ batchid }} tag:new
+      ##cmd: cat email.txt | notmuch insert --folder mail -tags +unread

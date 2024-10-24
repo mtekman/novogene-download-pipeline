@@ -20,7 +20,8 @@ ansible_remote_tmp: /tmp
 secrets_novogene : ~/.secrets/novagene_credentials
 secrets_usegalaxy : ~/.secrets/usegalaxy_credentials
 ##
-dir_tempdown: /home/dietpi/download_area
+##dir_tempdown: /home/dietpi/download_area
+dir_tempdown: /mnt/other/download_area
 ## Labsheet
 local_sheet: /home/dietpi/novogene_pipeline/samplesheet.org
 local_tsv: /home/dietpi/novogene_pipeline/samplesheet.tsv

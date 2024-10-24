@@ -2,10 +2,9 @@
   hosts: localhost
   vars:
     ## Populated from inventory: batchid, send_to_email, test_mode,
-    ##test_mode: false
-    test_mode: true
-    send_email: true
-    send_notification: true
+    test_mode: false
+    send_email: false
+    send_notification: false
   vars_files:
   - vars/messages.yaml  ## messages related to signals
   - vars/fixed.yaml     ## fixed variables that shouldn't need to change
@@ -28,15 +27,15 @@
   - name: Initialise tasks
     include_tasks: playbooks/initialise-signals.yaml
     
-  - name: Setup test batch data
-    when: test_mode
-    include_tasks: playbooks/test-batch.yaml
+  ##- name: Setup test batch data
+  ##  when: test_mode
+  ##  include_tasks: playbooks/test-batch.yaml
 
   - name: Queue ansible job
     include_tasks: playbooks/queue-ansible.yaml
 
   - name: Get JSON manifest
-    when: not test_mode
+    ##when: not test_mode
     include_tasks: playbooks/run-puppeteer.yaml
 
   - name: Process the archives
