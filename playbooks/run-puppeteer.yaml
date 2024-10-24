@@ -1,6 +1,8 @@
 - name: Get the JSON manifest
   ## Logs in to the novogene website because they have no working FTP
   ## and downloads the JSON manifest containing batch info and data links
+  vars:
+    idu: 1000
   block:  
   - include_tasks: playbooks/send-signals.yaml
     vars: {signal: manifest}
@@ -16,11 +18,25 @@
       src: get_batch_node.js
       dest: '{{ working_dir }}/get_batch_node.js'
 
+  - name: Get XAUTH
+    environment:
+        DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/{{ idu }}/bus'
+        XDG_RUNTIME_DIR: '/run/user/{{ idu }}'
+        DISPLAY: ':0'
+    shell: |
+       ps aux | grep "/usr/bin/Xwayland :0 -auth" | grep -v grep | sed -r 's|.*-auth ([^ ]*).*$|\1|'
+    register: xauth
+
   - name: Run puppeteer
     environment:
-        BATCHNO : '{{ batchid }}'
-        USERLOG : '{{ usernovo }}'
-        PWDLOG :  '{{ pwdnovo }}'
+       DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/{{ idu }}/bus'
+       XDG_RUNTIME_DIR: '/run/user/{{ idu }}'
+       DISPLAY: ':0'
+       XAUTH : '{{ xauth.stdout }}'
+       XAUTHORITY: '{{ xauth.stdout }}'
+       BATCHNO : '{{ batchid }}'
+       USERLOG : '{{ usernovo }}'
+       PWDLOG : '{{ pwdnovo }}'
     command:
        cmd: node get_batch_node.js
        chdir: '{{ working_dir }}'
